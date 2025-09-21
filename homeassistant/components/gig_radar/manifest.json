@@ -1,0 +1,12 @@
+{
+  "domain": "gig_radar",
+  "name": "Gig Radar",
+  "codeowners": ["@b-uwe"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://www.home-assistant.io/integrations/gig_radar",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "quality_scale": "bronze",
+  "requirements": []
+}
