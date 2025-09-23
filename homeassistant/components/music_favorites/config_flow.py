@@ -1,4 +1,4 @@
-"""Config flow for the Gig Radar integration."""
+"""Config flow for the Music Favorites integration."""
 
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     return {"title": "Name of the device"}
 
 
-class GigRadarConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Gig Radar."""
+class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Music Favorites."""
 
     VERSION = 1
 
@@ -82,7 +82,7 @@ class GigRadarConfigFlow(ConfigFlow, domain=DOMAIN):
         _LOGGER.debug("Creating default Config Entry for first time use")
 
         # Create config entry automatically
-        return self.async_create_entry(title="Gig Radar", data={"bands": favorites})
+        return self.async_create_entry(title="Music Favorites", data={"bands": favorites})
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

@@ -1,4 +1,4 @@
-"""Data models for the Gig Radar integration."""
+"""Data models for the Music Favorites integration."""
 
 # The main favorites storage - a hopefully smart structure for fast lookups and variants
 # Format: {"normalized_key": ["Display Name", "variant1", "variant2", ...]}

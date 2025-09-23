@@ -1,10 +1,10 @@
 {
-  "domain": "gig_radar",
-  "name": "Gig Radar",
+  "domain": "music_favorites",
+  "name": "Music Favorites",
   "codeowners": ["@b-uwe"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://www.home-assistant.io/integrations/gig_radar",
+  "documentation": "https://www.home-assistant.io/integrations/music_favorites",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "quality_scale": "bronze",

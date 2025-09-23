@@ -1,4 +1,4 @@
-"""Sensor platform for the Gig Radar integration."""
+"""Sensor platform for the Music Favorites integration."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import GigRadarConfigEntry
+from . import MusicFavoritesConfigEntry
 from .const import DOMAIN
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: GigRadarConfigEntry,
+    entry: MusicFavoritesConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Gig Radar sensors from a config entry."""
+    """Set up Music Favorites sensors from a config entry."""
 
     # Get our favorites data from the config entry
     favorites_data: dict[str, list[str]] = entry.data.get("bands", {})
@@ -25,7 +25,7 @@ async def async_setup_entry(
     device_info = DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_favorites")},
         name="Favorites",
-        manufacturer="Gig Radar",
+        manufacturer="Music Favorites",
         model="Favorites Collection",
     )
 
@@ -49,7 +49,7 @@ class FavoriteSensor(SensorEntity):
         self._favorite_key = favorite_key
         self._favorite_variants = favorite_variants
         self._attr_name = favorite_variants[0]  # Display name (first variant)
-        self._attr_unique_id = f"gig_radar_favorite_{favorite_key}"
+        self._attr_unique_id = f"music_favorites_favorite_{favorite_key}"
         self._attr_device_info = device_info
 
     @property

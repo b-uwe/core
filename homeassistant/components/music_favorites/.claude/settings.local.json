@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//workspace/core/**)",
+      "Bash(pytest:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
