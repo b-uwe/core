@@ -7,6 +7,7 @@
   "documentation": "https://www.home-assistant.io/integrations/music_favorites",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "loggers": ["music_favorites"],
   "quality_scale": "bronze",
   "requirements": []
 }

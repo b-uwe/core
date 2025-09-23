@@ -1,0 +1,7 @@
+{
+  "services": {
+    "add_favorite": {
+      "service": "mdi:heart-plus"
+    }
+  }
+}

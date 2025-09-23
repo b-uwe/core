@@ -1,0 +1,25 @@
+add_favorite:
+  fields:
+    config_entry:
+      required: true
+      selector:
+        config_entry:
+          integration: music_favorites
+    name:
+      required: true
+      example: "Dyscarnate"
+      selector:
+        text:
+    type:
+      required: true
+      default: "band"
+      selector:
+        select:
+          options:
+            - "band"
+            - "artist"
+    musicbrainz_id:
+      required: true
+      example: "f0d05c64-9959-4ae1-899b-acf51b97638c"
+      selector:
+        text:

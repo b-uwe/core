@@ -1,6 +1,6 @@
 rules:
   # Bronze
-  action-setup: todo
+  action-setup: done
   appropriate-polling: todo
   brands: done
   common-modules: todo
@@ -13,15 +13,17 @@ rules:
   docs-removal-instructions: todo
   entity-event-setup: todo
   entity-unique-id: done
-  has-entity-name: todo
-  runtime-data: done
+  has-entity-name: done
+  runtime-data:
+    status: exempt
+    comment: Integration uses static data stored in config entry, no runtime objects needed
   test-before-configure: todo
   test-before-setup: todo
-  unique-config-entry: todo
+  unique-config-entry: done
 
   # Silver
   action-exceptions: todo
-  config-entry-unloading: todo
+  config-entry-unloading: done
   docs-configuration-parameters: todo
   docs-installation-parameters: todo
   entity-unavailable: todo

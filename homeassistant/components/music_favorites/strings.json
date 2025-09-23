@@ -6,8 +6,33 @@
       }
     },
     "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
       "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
       "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
+    }
+  },
+  "services": {
+    "add_favorite": {
+      "name": "Add favorite",
+      "description": "Add a new favorite band or artist to your collection.",
+      "fields": {
+        "config_entry": {
+          "name": "Music Favorites",
+          "description": "The Music Favorites instance to add to."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The name of the band or artist."
+        },
+        "type": {
+          "name": "Type",
+          "description": "Whether this is a band or solo artist."
+        },
+        "musicbrainz_id": {
+          "name": "MusicBrainz ID",
+          "description": "The unique MusicBrainz identifier for this band or artist."
+        }
+      }
     }
   }
 }
