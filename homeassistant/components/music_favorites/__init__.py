@@ -33,7 +33,7 @@ _LOGGER.debug("Music Favorites module imported!")
 # Very simple type...
 type MusicFavoritesConfigEntry = ConfigEntry
 
-_PLATFORMS: list[Platform] = [Platform.SENSOR]
+_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CONVERSATION]
 
 # Make this integration be accessible from both UI as well as YAML
 # TODO: Long term goal would be make YAML imported config immutable
