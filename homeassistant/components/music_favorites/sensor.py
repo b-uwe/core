@@ -23,9 +23,7 @@ class FavoriteSensor(SensorEntity):
         """Initialize the favorite sensor."""
         self._favorite_key = favorite_key
         self._favorite_variants = favorite_variants
-        self._attr_name = (
-            f"Music Favorites {favorite_variants[0]}"  # Display name (first variant)
-        )
+        self._attr_name = favorite_variants[0]  # Just the artist name
         self._attr_unique_id = f"music_favorites_favorite_{favorite_key}"
         self._attr_device_info = device_info
         self._attr_entity_id = f"music_favorites_{favorite_variants[0].lower()}"
