@@ -13,6 +13,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import MusicFavoritesConfigEntry
 from .const import DOMAIN
 
+# Serialize entity updates for future API rate limiting
+PARALLEL_UPDATES = 1
+
 
 class FavoriteSensor(SensorEntity):
     """Sensor for a single favorite."""

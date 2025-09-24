@@ -17,6 +17,9 @@ from .models import add_favorite, remove_favorite
 
 _LOGGER = logging.getLogger(__name__)
 
+# Serialize entity updates for future API rate limiting
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
     _hass: HomeAssistant,
@@ -118,9 +121,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
 
             try:
                 # Add the favorite
-                await add_favorite(
-                    self.hass, self._entry, artist_name, "band"
-                )
+                await add_favorite(self.hass, self._entry, artist_name, "band")
 
                 # Create success response
                 response = intent.IntentResponse(language="en")
