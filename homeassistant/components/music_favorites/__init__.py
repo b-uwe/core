@@ -24,7 +24,6 @@ ADD_FAVORITE_SCHEMA = vol.Schema(
         vol.Optional("config_entry"): str,
         vol.Required("name"): str,
         vol.Required("type"): vol.In(["band", "artist"]),
-        vol.Required("musicbrainz_id"): str,
     }
 )
 
@@ -90,7 +89,6 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
             target_entry,
             call.data["name"],
             call.data["type"],
-            call.data["musicbrainz_id"],
         )
 
     # Register the service

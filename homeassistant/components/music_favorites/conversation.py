@@ -117,12 +117,9 @@ class MusicFavoritesConversationEntity(ConversationEntity):
             _LOGGER.debug("Track/add request for: '%s'", artist_name)
 
             try:
-                # Generate dummy MusicBrainz ID
-                dummy_id = f"dummy-{artist_name.lower().replace(' ', '-')}"
-
                 # Add the favorite
                 await add_favorite(
-                    self.hass, self._entry, artist_name, "band", dummy_id
+                    self.hass, self._entry, artist_name, "band"
                 )
 
                 # Create success response
@@ -131,7 +128,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 _LOGGER.debug("Successfully added '%s'", artist_name)
                 return ConversationResult(response=response)
 
-            except ValueError as e:
+            except ServiceValidationError as e:
                 _LOGGER.debug("Failed to add '%s': %s", artist_name, e)
                 response = intent.IntentResponse(language="en")
                 response.async_set_speech(

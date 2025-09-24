@@ -28,9 +28,10 @@ async def add_favorite(
     entry: ConfigEntry,
     name: str,
     favorite_type: str,
-    musicbrainz_id: str,
 ) -> None:
     """Add a new favorite to the collection."""
+    # Generate dummy MusicBrainz ID
+    musicbrainz_id = f"dummy-{name.lower().replace(' ', '-')}"
     _LOGGER.debug("Adding favorite: %s (%s) - %s", name, favorite_type, musicbrainz_id)
 
     # Get current favorites
