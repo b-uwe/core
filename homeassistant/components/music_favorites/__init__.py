@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
+from typing import Any
 
 import voluptuous as vol
 
@@ -29,8 +31,8 @@ ADD_FAVORITE_SCHEMA = vol.Schema(
 
 _LOGGER.debug("Music Favorites module imported!")
 
-# Very simple type...
-type MusicFavoritesConfigEntry = ConfigEntry
+# ConfigEntry type with runtime_data dict
+type MusicFavoritesConfigEntry = ConfigEntry[dict[str, Any]]
 
 _PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CONVERSATION]
 
@@ -118,6 +120,11 @@ async def async_setup_entry(
     """Set up a Music Favorites Config Entry."""
 
     _LOGGER.debug("Setting up config entry: %s", entry.title)
+
+    # Initialize runtime data dict
+    entry.runtime_data = {
+        "update_interval": timedelta(hours=6),
+    }
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
 
