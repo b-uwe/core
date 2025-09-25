@@ -30,11 +30,53 @@ The Music Favorites integration allows you to manage and track your favorite ban
    Restart your Home Assistant instance to load the integration.
 
 3. **Configure via UI** (Alternative)
-   - Not yet available
+   - Go to **Settings** → **Devices & Services**
+   - Click **+ Add Integration**
+   - Search for "Music Favorites"
+   - Click **Add** (no configuration parameters required)
 
 4. **Verify Installation**
    - Check **Developer Tools** → **Services** for `music_favorites.add_favorite`
    - Look for the conversation entity in **Settings** → **Voice Assistants**
+
+### Installation Parameters
+
+The Music Favorites integration uses a simplified installation process:
+
+**UI Installation Parameters:**
+- **No parameters required**: The integration uses an automatic "done immediately" configuration flow
+- **Unique ID**: Automatically set to `music_favorites` (only one instance allowed)
+- **Title**: Automatically set to "Music Favorites"
+
+**YAML Installation Parameters:**
+- **Domain**: `music_favorites` (required in configuration.yaml)
+- **Options**: No additional options available during installation
+
+**Installation Notes:**
+- **Automatic Setup**: No user input required during installation
+- **Single Instance**: Attempting to add a second instance will be prevented automatically
+- **Immediate Activation**: Integration becomes active immediately after installation
+
+## Configuration
+
+### YAML Configuration
+
+The Music Favorites integration can be configured via `configuration.yaml` with the following options:
+
+```yaml
+music_favorites:
+  # Basic configuration (no parameters required)
+```
+
+**Configuration Parameters:**
+
+Currently, the integration does not require any configuration parameters. Simply add `music_favorites:` to your `configuration.yaml` to enable the integration.
+
+### Configuration Notes
+
+- **Single Instance**: Only one Music Favorites integration instance is supported per Home Assistant installation
+- **Local Storage**: All configuration and favorite data is stored locally in Home Assistant's database
+- **No External Dependencies**: The integration works entirely offline and does not require internet connectivity for now. This is subject to change in the future
 
 ## Usage
 
