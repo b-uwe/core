@@ -10,19 +10,20 @@
 - [x] **First Visual Usage** - See the integration in action for the first time
 
 ### Phase 2: First Config Flow that actually works
-- [x] **Add a logo** - Add a first logo for this integration ✅ High-quality icon ready for brand repo
+- [x] **Add a logo** - Add a first logo for this integration - It's not a great one, but it does the job
 - [x] **Entity Icons** - Set Entity Icons
 - [x] **A proper Config Flow** - Create a very first "proper" Config Flow
 
-### Phase 3: Core Features (Bronze Complete) ✅ **ACHIEVED!**
+### Phase 3: Core Features (Bronze Complete)
 - [x] **Runtime Data** - Create very first storage structure
 - [x] **Entity Unique IDs** - Proper identification
 - [x] **Entity Naming** - `has_entity_name` pattern
 - [x] **Testing Infrastructure** - 99% test coverage across all modules at the point of ticking this
 
-### Phase 4: More code quality
-- [ ] Achieve as much of Silver and Gold (hell, even Platinum) as possible with an integration
-      that doesn't actually do anything 😅
+### Phase 4: More Tiers
+- [x] **Tick all the boxes** - and try not to cheat 😅
+      To be fair, this isn't easy at all, but what's probably more important: I need to untick boxes
+      again when moving forward!
 
 ### Phase 5: First API connections
 - [ ] Connect to MusicBrainz
@@ -56,7 +57,7 @@
 - **Quality Target**: Platinum level from the start
 
 ## Checkboxes to tick
-### Bronze ✅ **COMPLETE!**
+### Bronze
 - [x] `action-setup` - Service actions are registered in async_setup
 - [x] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval *(EXEMPT: local data only)*
 - [x] `brands` - Has branding assets available for the integration
@@ -77,22 +78,22 @@
 - [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
 
 ### Silver
-- [ ] `action-exceptions` - Service actions raise exceptions when encountering failures
+- [x] `action-exceptions` - Service actions raise exceptions when encountering failures
 - [x] `config-entry-unloading` - Support config entry unloading
-- [ ] `docs-configuration-parameters` - The documentation describes all integration configuration options
-- [ ] `docs-installation-parameters` - The documentation describes all integration installation parameters
+- [x] `docs-configuration-parameters` - The documentation describes all integration configuration options
+- [x] `docs-installation-parameters` - The documentation describes all integration installation parameters
 - [x] `entity-unavailable` - Mark entity unavailable if appropriate *(EXEMPT: basically impossible given it's all local)*
 - [x] `integration-owner` - Has an integration owner
-- [ ] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected
+- [x] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected *(EXEMPT: local data only)*
 - [x] `parallel-updates` - Number of parallel updates is specified
 - [x] `reauthentication-flow` - Reauthentication needs to be available via the UI *(EXEMPT: no authentication)*
 - [x] `test-coverage` - Above 95% test coverage for all integration modules
 
 ### Gold
 - [x] `devices` - The integration creates devices
-- [ ] `diagnostics` - Implements diagnostics
-- [ ] `discovery-update-info` - Integration uses discovery info to update network information
-- [ ] `discovery` - Devices can be discovered
+- [x] `diagnostics` - Implements diagnostics
+- [x] `discovery-update-info` - Integration uses discovery info to update network information *(EXEMPT: local data only)*
+- [x] `discovery` - Devices can be discovered *(EXEMPT: local data only)*
 - [ ] `docs-data-update` - The documentation describes how data is updated
 - [ ] `docs-examples` - The documentation provides automation examples the user can use.
 - [ ] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
@@ -100,18 +101,18 @@
 - [x] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
 - [ ] `docs-troubleshooting` - The documentation provides troubleshooting information
 - [x] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
-- [ ] `dynamic-devices` - Devices added after integration setup
-- [ ] `entity-category` - Entities are assigned an appropriate EntityCategory
-- [ ] `entity-device-class` - Entities use device classes where possible
-- [ ] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities
-- [ ] `entity-translations` - Entities have translated names
-- [ ] `exception-translations` - Exception messages are translatable
-- [ ] `icon-translations` - Entities implement icon translations
-- [ ] `reconfiguration-flow` - Integrations should have a reconfigure flow
-- [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
-- [ ] `stale-devices` - Stale devices are removed
+- [x] `dynamic-devices` - Devices added after integration setup *(EXEMPT: favorites managed via services)*
+- [x] `entity-category` - Entities are assigned an appropriate EntityCategory *(EXEMPT: favorites are main content)*
+- [x] `entity-device-class` - Entities use device classes where possible *(EXEMPT: no specific device class for favorites)*
+- [x] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities *(EXEMPT: all favorites should be visible)*
+- [x] `entity-translations` - Entities have translated names
+- [x] `exception-translations` - Exception messages are translatable *(EXEMPT: using standard HA exceptions)*
+- [x] `icon-translations` - Entities implement icon translations
+- [x] `reconfiguration-flow` - Integrations should have a reconfigure flow *(EXEMPT: no configuration to reconfigure)*
+- [x] `repair-issues` - Repair issues and repair flows are used when user intervention is needed *(EXEMPT: local data only)*
+- [x] `stale-devices` - Stale devices are removed *(EXEMPT: all data locally managed)*
 
 ### Platinum
-- [ ] `async-dependency` - Dependency is async
-- [ ] `inject-websession` - The integration dependency supports passing in a websession
-- [ ] `strict-typing` - Strict typing
+- [x] `async-dependency` - Dependency is async *(EXEMPT: no external dependencies)*
+- [x] `inject-websession` - The integration dependency supports passing in a websession *(EXEMPT: local data only)*
+- [x] `strict-typing` - Strict typing

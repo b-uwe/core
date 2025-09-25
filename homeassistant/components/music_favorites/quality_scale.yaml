@@ -50,10 +50,14 @@ rules:
   test-coverage: done
 
   # Gold
-  devices: todo
-  diagnostics: todo
-  discovery-update-info: todo
-  discovery: todo
+  devices: done
+  diagnostics: done
+  discovery-update-info:
+    status: exempt
+    comment: Integration manages local favorites data, no discovery functionality
+  discovery:
+    status: exempt
+    comment: Integration manages local favorites data, no discovery functionality
   docs-data-update: todo
   docs-examples: todo
   docs-known-limitations: todo
@@ -61,18 +65,38 @@ rules:
   docs-supported-functions: todo
   docs-troubleshooting: todo
   docs-use-cases: todo
-  dynamic-devices: todo
-  entity-category: todo
-  entity-device-class: todo
-  entity-disabled-by-default: todo
-  entity-translations: todo
-  exception-translations: todo
-  icon-translations: todo
-  reconfiguration-flow: todo
-  repair-issues: todo
-  stale-devices: todo
+  dynamic-devices:
+    status: exempt
+    comment: No dynamic devices to add/remove, favorites are managed via services
+  entity-category:
+    status: exempt
+    comment: Favorite entities are not diagnostic/config - they represent user's main content
+  entity-device-class:
+    status: exempt
+    comment: Sensors represent favorites without specific device class
+  entity-disabled-by-default:
+    status: exempt
+    comment: All favorite entities should be enabled by default for user visibility
+  entity-translations: done
+  exception-translations:
+    status: exempt
+    comment: Integration uses standard Home Assistant exceptions, no custom translations needed
+  icon-translations: done
+  reconfiguration-flow:
+    status: exempt
+    comment: No configuration parameters to reconfigure after initial setup
+  repair-issues:
+    status: exempt
+    comment: Integration manages local data only, no external services to repair
+  stale-devices:
+    status: exempt
+    comment: No external devices to become stale, all data is locally managed
 
   # Platinum
-  async-dependency: todo
-  inject-websession: todo
-  strict-typing: todo
+  async-dependency:
+    status: exempt
+    comment: Integration has no external dependencies requiring async support
+  inject-websession:
+    status: exempt
+    comment: Integration manages local data only, no web requests required
+  strict-typing: done
