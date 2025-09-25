@@ -12,11 +12,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .const import VERSION
+
 _LOGGER = logging.getLogger(__name__)
 
 # MusicBrainz API configuration
 MUSICBRAINZ_API_URL = "https://musicbrainz.org/ws/2"
-USER_AGENT = "Music Favorites 0.0.1 Alpha (https://home-assistant.io/integrations/music_favorites)"
+USER_AGENT = f"Music Favorites {VERSION} (https://home-assistant.io/integrations/music_favorites)"
 
 
 class MusicBrainzError(HomeAssistantError):

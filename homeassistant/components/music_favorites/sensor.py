@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 from .types import MusicFavoritesConfigEntry
 
 # Serialize entity updates for future API rate limiting
@@ -70,7 +70,7 @@ async def async_setup_entry(
         name=f"{entry.title} - Bands & Artists",
         manufacturer="Music Favorites Integration",
         model="Bands & Artists Collection",
-        sw_version="1.0",
+        sw_version=VERSION,
         configuration_url=f"homeassistant://config/integrations/integration/{DOMAIN}",
     )
 
