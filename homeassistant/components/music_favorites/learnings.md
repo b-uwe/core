@@ -14,9 +14,9 @@
   * Slot change on a Festival
   * New Concert in a Venue
   * ...
-## Architectual Basics
+## Architectural Basics
 * IN:
-  * List of Name/Type Tupels
+  * List of Name/Type Tuples
 * Out:
   * Events containing Text
   * One sensor entity per favorite
@@ -62,7 +62,7 @@
     * \_init_flow() is a helper for that
     * \_init_flow() calls the Import Flow, which triggers MusicFavoritesConfigFlow.async_step_import() from config_flow.py
   * async_setup_entry():  # Called when the integration starts from UI
-    * Initalizes all Platform (=Entity Type) modules (only SENSOR from sensor.py in our case)
+    * Initializes all Platform (=Entity Type) modules (only SENSOR from sensor.py in our case)
   * async_unload_entry(): # Called when the integration stops
 
 ## config_flow.py
