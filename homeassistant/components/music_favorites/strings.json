@@ -62,5 +62,11 @@
         }
       }
     }
+  },
+  "issues": {
+    "musicbrainz_connectivity": {
+      "title": "MusicBrainz connectivity problem",
+      "description": "Cannot connect to the MusicBrainz service. This may affect artist data and recommendations. Error details: {issue_details}"
+    }
   }
 }
