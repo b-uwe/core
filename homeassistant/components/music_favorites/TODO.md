@@ -1,26 +1,48 @@
-# Gig Radar Integration Development TODO
+# Music Favorites Integration Development TODO
 
 ## Development Phases
 
 ### Phase 1: Foundation (Bronze Essentials)
 - [x] **Data Models** (`models.py`) - Most simplistic data model to get us started
 - [x] **Config Flow** - Most simplistic Config Flow to get us started
-- [x] **Persistant Data** - Create very first storage structure
+- [x] **Persistent Data** - Create very first storage structure
 - [x] **Basic Sensor Platform** - One (most simplistic) sensor per band
 - [x] **First Visual Usage** - See the integration in action for the first time
 
 ### Phase 2: First Config Flow that actually works
-- [ ] **Add a logo** - Add a first logo for this integration ⬅ Needs to happen via the brand repo
+- [x] **Add a logo** - Add a first logo for this integration ✅ High-quality icon ready for brand repo
 - [x] **Entity Icons** - Set Entity Icons
 - [x] **A proper Config Flow** - Create a very first "proper" Config Flow
 
-### Phase 3: Core Features (Bronze Complete)
-- [ ] **Runtime Data** - Create very first storage structure
-- [ ] **Entity Unique IDs** - Proper identification
-- [ ] **Entity Naming** - `has_entity_name` pattern
-- [ ] **Testing Infrastructure** - Config flow tests
+### Phase 3: Core Features (Bronze Complete) ✅ **ACHIEVED!**
+- [x] **Runtime Data** - Create very first storage structure
+- [x] **Entity Unique IDs** - Proper identification
+- [x] **Entity Naming** - `has_entity_name` pattern
+- [x] **Testing Infrastructure** - 99% test coverage across all modules at the point of ticking this
 
-### Phase 4: Favorite Types
+### Phase 4: More code quality
+- [ ] Achieve as much of Silver and Gold (hell, even Platinum) as possible with an integration
+      that doesn't actually do anything 😅
+
+### Phase 5: First API connections
+- [ ] Connect to MusicBrainz
+  - [ ] Reset appropriate-polling, test-before-configure, test-before-setup, MAYBE dependency-transparency
+- [ ] Allow Adding VIA MusicBrainz ID
+- [ ] Feed name into MusicBrainz to get an ID back
+- [ ] Error handling for "not" found
+- [ ] Storing the ID from the first entry found
+- [ ] Handling multiple entries by asking back with the user
+- [ ] Storing all Aliases
+- [ ] Error Handling
+- [ ] Attach BandsInTown
+- [ ] Pull Events
+  - [ ] Reset entity-event-setup
+
+### Phase 6: YAML Setup
+- [ ] Allow Setup 100% from YAML
+- [ ] Disallow modifying Config set up from YAML
+
+### Phase 7: Favorite Types
 - [ ] **Split Acts into two** - distinguish bands from solo artists
 - [ ] **Add Festivals** - Allow defining favorite festivals
 
@@ -28,36 +50,30 @@
 
 ### Current Understanding
 - **Local Storage**: Primary focus on local band/artist management
-- **Future Cloud Integration**: ~25% chance of optional login to external services
-- **Device Model**: One HA device per band/artist
+- **Future Cloud Integration**: ~25% chance of optional or necessary LOGIN to external services
+- **Device Model**: ONE Instance of the Integration, ONE Device, one sensor entity per band/artist
 - **Data Storage**: Case-insensitive band names, locally stored
 - **Quality Target**: Platinum level from the start
 
-### Key Design Decisions
-1. **Hybrid Architecture**: Local-first with optional cloud enhancement
-2. **No Required Authentication**: Core functionality works offline
-3. **Optional Services**: Future integrations remain optional
-4. **Case-Insensitive**: Band name normalization throughout
-
 ## Checkboxes to tick
-### Bronze
-- [ ] `action-setup` - Service actions are registered in async_setup
-- [ ] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval
-- [ ] `brands` - Has branding assets available for the integration
-- [ ] `common-modules` - Place common patterns in common modules
-- [ ] `config-flow-test-coverage` - Full test coverage for the config flow
+### Bronze ✅ **COMPLETE!**
+- [x] `action-setup` - Service actions are registered in async_setup
+- [x] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval *(EXEMPT: local data only)*
+- [x] `brands` - Has branding assets available for the integration
+- [x] `common-modules` - Place common patterns in common modules *(EXEMPT: no duplicate patterns)*
+- [x] `config-flow-test-coverage` - Full test coverage for the config flow
 - [x] `config-flow` - Integration needs to be able to be set up via the UI
-- [ ] `dependency-transparency` - Dependency transparency
-- [ ] `docs-actions` - The documentation describes the provided service actions that can be used
-- [ ] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
-- [ ] `docs-installation-instructions` - The documentation provides step-by-step installation instructions for the integration, including, if needed, prerequisites
-- [ ] `docs-removal-instructions` - The documentation provides removal instructions
-- [ ] `entity-event-setup` - Entity events are subscribed in the correct lifecycle methods
+- [x] `dependency-transparency` - Dependency transparency *(EXEMPT: no external dependencies)*
+- [x] `docs-actions` - The documentation describes the provided service actions that can be used
+- [x] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
+- [x] `docs-installation-instructions` - The documentation provides step-by-step installation instructions for the integration, including, if needed, prerequisites
+- [x] `docs-removal-instructions` - The documentation provides removal instructions
+- [x] `entity-event-setup` - Entity events are subscribed in the correct lifecycle methods *(EXEMPT: no external events)*
 - [x] `entity-unique-id` - Entities have a unique ID
 - [x] `has-entity-name` - Entities use has_entity_name = True
-- [ ] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
-- [ ] `test-before-configure` - Test a connection in the config flow
-- [ ] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
+- [x] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
+- [x] `test-before-configure` - Test a connection in the config flow *(EXEMPT: no external services)*
+- [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly *(EXEMPT: no external connections)*
 - [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
 
 ### Silver
@@ -65,15 +81,15 @@
 - [x] `config-entry-unloading` - Support config entry unloading
 - [ ] `docs-configuration-parameters` - The documentation describes all integration configuration options
 - [ ] `docs-installation-parameters` - The documentation describes all integration installation parameters
-- [ ] `entity-unavailable` - Mark entity unavailable if appropriate
-- [ ] `integration-owner` - Has an integration owner
+- [x] `entity-unavailable` - Mark entity unavailable if appropriate *(EXEMPT: basically impossible given it's all local)*
+- [x] `integration-owner` - Has an integration owner
 - [ ] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected
-- [ ] `parallel-updates` - Number of parallel updates is specified
-- [ ] `reauthentication-flow` - Reauthentication needs to be available via the UI
-- [ ] `test-coverage` - Above 95% test coverage for all integration modules
+- [x] `parallel-updates` - Number of parallel updates is specified
+- [x] `reauthentication-flow` - Reauthentication needs to be available via the UI *(EXEMPT: no authentication)*
+- [x] `test-coverage` - Above 95% test coverage for all integration modules
 
 ### Gold
-- [ ] `devices` - The integration creates devices
+- [x] `devices` - The integration creates devices
 - [ ] `diagnostics` - Implements diagnostics
 - [ ] `discovery-update-info` - Integration uses discovery info to update network information
 - [ ] `discovery` - Devices can be discovered
@@ -81,9 +97,9 @@
 - [ ] `docs-examples` - The documentation provides automation examples the user can use.
 - [ ] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
 - [ ] `docs-supported-devices` - The documentation describes known supported / unsupported devices
-- [ ] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
+- [x] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
 - [ ] `docs-troubleshooting` - The documentation provides troubleshooting information
-- [ ] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
+- [x] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
 - [ ] `dynamic-devices` - Devices added after integration setup
 - [ ] `entity-category` - Entities are assigned an appropriate EntityCategory
 - [ ] `entity-device-class` - Entities use device classes where possible

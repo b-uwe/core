@@ -1,24 +1,34 @@
 rules:
   # Bronze
   action-setup: done
-  appropriate-polling: todo
+  appropriate-polling:
+    status: exempt
+    comment: Integration manages local favorites data only, no external polling required
   brands: done
-  common-modules: todo
-  config-flow-test-coverage: todo
+  common-modules:
+    status: exempt
+    comment: Integration uses standard Home Assistant patterns, no duplicate code to extract
+  config-flow-test-coverage: done
   config-flow: done
-  dependency-transparency: todo
-  docs-actions: todo
-  docs-high-level-description: todo
-  docs-installation-instructions: todo
-  docs-removal-instructions: todo
-  entity-event-setup: todo
+  dependency-transparency:
+    status: exempt
+    comment: Integration has no external API dependencies
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup:
+    status: exempt
+    comment: Integration does not subscribe to external events
   entity-unique-id: done
   has-entity-name: done
-  runtime-data:
+  runtime-data: done
+  test-before-configure:
     status: exempt
-    comment: Integration uses static data stored in config entry, no runtime objects needed
-  test-before-configure: todo
-  test-before-setup: todo
+    comment: No external services to test, integration manages local data only
+  test-before-setup:
+    status: exempt
+    comment: No external connections to verify, integration manages local data only
   unique-config-entry: done
 
   # Silver
@@ -26,12 +36,16 @@ rules:
   config-entry-unloading: done
   docs-configuration-parameters: todo
   docs-installation-parameters: todo
-  entity-unavailable: todo
-  integration-owner: todo
+  entity-unavailable:
+    status: exempt
+    comment: Basically impossible given it's all local
+  integration-owner: done
   log-when-unavailable: todo
-  parallel-updates: todo
-  reauthentication-flow: todo
-  test-coverage: todo
+  parallel-updates: done
+  reauthentication-flow:
+    status: exempt
+    comment: No authentication
+  test-coverage: done
 
   # Gold
   devices: todo

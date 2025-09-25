@@ -1,145 +1,86 @@
-"""Test the Gig Radar config flow."""
+"""Test the Music Favorites config flow."""
 
-from unittest.mock import AsyncMock, patch
+from collections.abc import Mapping
+from typing import Any
 
 from homeassistant import config_entries
-from homeassistant.components.gig_radar.config_flow import CannotConnect, InvalidAuth
-from homeassistant.components.gig_radar.const import DOMAIN
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.components.music_favorites.const import DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 
-async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
-    """Test we get the form."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {}
+def _assert_default_bands_present(result_data: Mapping[str, Any]) -> None:
+    """Assert that the default pre-configured bands are present."""
+    favorites = result_data["favorites"]
 
-    with patch(
-        "homeassistant.components.gig_radar.config_flow.PlaceholderHub.authenticate",
-        return_value=True,
-    ):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
-            },
-        )
-        await hass.async_block_till_done()
+    # Check that all three default bands are present
+    assert "f0d05c64-9959-4ae1-899b-acf51b97638c" in favorites  # Dyscarnate
+    assert "f9b57146-c5ce-41ad-adfb-ee904a4f7b19" in favorites  # Misery Index
+    assert "ab81255c-7a4f-4528-bb77-4a3fbd8e8317" in favorites  # Jungle Rot
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Name of the device"
-    assert result["data"] == {
-        CONF_HOST: "1.1.1.1",
-        CONF_USERNAME: "test-username",
-        CONF_PASSWORD: "test-password",
-    }
-    assert len(mock_setup_entry.mock_calls) == 1
+    # Verify at least one band name is correct
+    assert favorites["f0d05c64-9959-4ae1-899b-acf51b97638c"] == ["Dyscarnate"]
 
 
-async def test_form_invalid_auth(
-    hass: HomeAssistant, mock_setup_entry: AsyncMock
-) -> None:
-    """Test we handle invalid auth."""
+async def test_user_flow_success(hass: HomeAssistant) -> None:
+    """Test successful user config flow - creates entry immediately."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    with patch(
-        "homeassistant.components.gig_radar.config_flow.PlaceholderHub.authenticate",
-        side_effect=InvalidAuth,
-    ):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
-            },
-        )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_auth"}
-
-    # Make sure the config flow tests finish with either an
-    # FlowResultType.CREATE_ENTRY or FlowResultType.ABORT so
-    # we can show the config flow is able to recover from an error.
-    with patch(
-        "homeassistant.components.gig_radar.config_flow.PlaceholderHub.authenticate",
-        return_value=True,
-    ):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
-            },
-        )
-        await hass.async_block_till_done()
-
+    # Should immediately create entry (no form needed)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Name of the device"
-    assert result["data"] == {
-        CONF_HOST: "1.1.1.1",
-        CONF_USERNAME: "test-username",
-        CONF_PASSWORD: "test-password",
-    }
-    assert len(mock_setup_entry.mock_calls) == 1
+    assert result["title"] == "Music Favorites"
+    assert "favorites" in result["data"]
+
+    # Verify default bands are configured
+    _assert_default_bands_present(result["data"])
 
 
-async def test_form_cannot_connect(
-    hass: HomeAssistant, mock_setup_entry: AsyncMock
-) -> None:
-    """Test we handle cannot connect error."""
-    result = await hass.config_entries.flow.async_init(
+async def test_user_flow_duplicate_prevented(hass: HomeAssistant) -> None:
+    """Test that duplicate config entries are prevented."""
+    # Create first entry
+    result1 = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
+    assert result1["type"] is FlowResultType.CREATE_ENTRY
+    _assert_default_bands_present(result1["data"])
 
-    with patch(
-        "homeassistant.components.gig_radar.config_flow.PlaceholderHub.authenticate",
-        side_effect=CannotConnect,
-    ):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
-            },
-        )
+    # Try to create second entry - should be aborted
+    result2 = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result2["type"] is FlowResultType.ABORT
+    assert result2["reason"] == "already_configured"
 
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "cannot_connect"}
 
-    # Make sure the config flow tests finish with either an
-    # FlowResultType.CREATE_ENTRY or FlowResultType.ABORT so
-    # we can show the config flow is able to recover from an error.
+async def test_import_flow(hass: HomeAssistant) -> None:
+    """Test import flow from YAML configuration."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_IMPORT}
+    )
 
-    with patch(
-        "homeassistant.components.gig_radar.config_flow.PlaceholderHub.authenticate",
-        return_value=True,
-    ):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
-            },
-        )
-        await hass.async_block_till_done()
-
+    # Should create entry immediately (same as user flow)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Name of the device"
-    assert result["data"] == {
-        CONF_HOST: "1.1.1.1",
-        CONF_USERNAME: "test-username",
-        CONF_PASSWORD: "test-password",
-    }
-    assert len(mock_setup_entry.mock_calls) == 1
+    assert result["title"] == "Music Favorites"
+    assert "favorites" in result["data"]
+
+    # Verify default bands are configured
+    _assert_default_bands_present(result["data"])
+
+
+async def test_import_flow_duplicate_prevented(hass: HomeAssistant) -> None:
+    """Test that duplicate imports are prevented."""
+    # Create entry via user flow
+    result1 = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result1["type"] is FlowResultType.CREATE_ENTRY
+    _assert_default_bands_present(result1["data"])
+
+    # Try import - should be aborted
+    result2 = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_IMPORT}
+    )
+    assert result2["type"] is FlowResultType.ABORT
+    assert result2["reason"] == "already_configured"
