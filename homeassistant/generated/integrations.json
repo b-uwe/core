@@ -4201,6 +4201,12 @@
       "config_flow": true,
       "iot_class": "local_push"
     },
+    "music_favorites": {
+      "name": "Music Favorites",
+      "integration_type": "service",
+      "config_flow": true,
+      "iot_class": "cloud_polling"
+    },
     "mutesync": {
       "name": "mutesync",
       "integration_type": "hub",
