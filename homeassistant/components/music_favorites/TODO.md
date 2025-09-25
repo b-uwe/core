@@ -53,12 +53,7 @@
 
 ## Architecture Notes
 
-### Current Understanding
-- **Local Storage**: Primary focus on local band/artist management
-- **Future Cloud Integration**: ~25% chance of optional or necessary LOGIN to external services
-- **Device Model**: ONE Instance of the Integration, ONE Device, one sensor entity per band/artist
-- **Data Storage**: Case-insensitive band names, locally stored
-- **Quality Target**: Platinum level from the start
+See architecture.md
 
 ## Checkboxes to tick
 ### Bronze
