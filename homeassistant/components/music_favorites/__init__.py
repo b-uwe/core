@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
-from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import UnknownFlow
@@ -16,14 +14,13 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
 from .services import register_services
+from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 
 _LOGGER.debug("Music Favorites module imported!")
 
-# ConfigEntry type with runtime_data dict
-type MusicFavoritesConfigEntry = ConfigEntry[dict[str, Any]]
 
 _PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CONVERSATION]
 

@@ -7,13 +7,13 @@ import re
 from typing import Any
 
 from homeassistant.components.conversation import ConversationEntity, ConversationResult
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import intent
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .models import add_favorite, remove_favorite
+from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ PARALLEL_UPDATES = 1
 
 async def async_setup_entry(
     _hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MusicFavoritesConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Music Favorites conversation entity."""
@@ -37,7 +37,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
     _attr_has_entity_name = True
     _attr_name = "Music Favorites Assistant"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: MusicFavoritesConfigEntry) -> None:
         """Initialize the Music Favorites conversation entity."""
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_conversation"

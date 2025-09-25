@@ -12,6 +12,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from .const import DOMAIN
 from .models import add_favorite, remove_favorite
+from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,9 @@ REMOVE_FAVORITE_SCHEMA = vol.Schema(
 )
 
 
-def _get_target_entry(hass: HomeAssistant, call: ServiceCall):
+def _get_target_entry(
+    hass: HomeAssistant, call: ServiceCall
+) -> MusicFavoritesConfigEntry:
     """Get the target config entry for a service call."""
     config_entry_id = call.data.get("config_entry")
     if config_entry_id:
