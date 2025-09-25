@@ -10,9 +10,11 @@ import voluptuous as vol
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import UnknownFlow
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
+from .musicbrainz import MusicBrainzClient, MusicBrainzError
 from .services import register_services
 from .types import MusicFavoritesConfigEntry
 
@@ -44,7 +46,7 @@ async def _init_flow(hass: HomeAssistant) -> None:
     try:
         await hass.config_entries.flow.async_init(DOMAIN, context={"source": "import"})
     except UnknownFlow:
-        # Ignore the error, it doesn't matter
+        # Ignore the error, it doesn't matter, as we're coming from IMPORT initialization
         _LOGGER.debug("Ignoring possible race condition when initializing Config Flow")
 
 
@@ -77,9 +79,27 @@ async def async_setup_entry(
 
     _LOGGER.debug("Setting up config entry: %s", entry.title)
 
-    # Initialize runtime data dict
+    # Test MusicBrainz connectivity before setup
+    _LOGGER.debug("Testing MusicBrainz connectivity during setup")
+    try:
+        client = MusicBrainzClient(hass)
+        await client.search_artists("test", limit=1)
+        _LOGGER.debug("MusicBrainz connectivity confirmed during setup")
+
+    except MusicBrainzError as err:
+        _LOGGER.warning("MusicBrainz unavailable during setup: %s", err)
+        raise ConfigEntryNotReady(f"MusicBrainz service unavailable: {err}") from err
+
+    except Exception as err:
+        _LOGGER.exception("Unexpected error testing MusicBrainz connectivity")
+        raise ConfigEntryNotReady(
+            f"Failed to verify MusicBrainz connectivity: {err}"
+        ) from err
+
+    # Initialize runtime data dict with MusicBrainz client
     entry.runtime_data = {
         "update_interval": timedelta(hours=6),
+        "musicbrainz_client": client,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)

@@ -1,18 +1,14 @@
 rules:
   # Bronze
   action-setup: done
-  appropriate-polling:
-    status: exempt
-    comment: Integration manages local favorites data only, no external polling required
+  appropriate-polling: done
   brands: done
   common-modules:
     status: exempt
     comment: Integration uses standard Home Assistant patterns, no duplicate code to extract
   config-flow-test-coverage: done
   config-flow: done
-  dependency-transparency:
-    status: exempt
-    comment: Integration has no external API dependencies
+  dependency-transparency: done
   docs-actions: done
   docs-high-level-description: done
   docs-installation-instructions: done
@@ -23,12 +19,8 @@ rules:
   entity-unique-id: done
   has-entity-name: done
   runtime-data: done
-  test-before-configure:
-    status: exempt
-    comment: No external services to test, integration manages local data only
-  test-before-setup:
-    status: exempt
-    comment: No external connections to verify, integration manages local data only
+  test-before-configure: done
+  test-before-setup: done
   unique-config-entry: done
 
   # Silver
@@ -36,9 +28,7 @@ rules:
   config-entry-unloading: done
   docs-configuration-parameters: done
   docs-installation-parameters: done
-  entity-unavailable:
-    status: exempt
-    comment: Basically impossible given it's all local
+  entity-unavailable: done
   integration-owner: done
   log-when-unavailable:
     status: exempt
@@ -85,18 +75,12 @@ rules:
   reconfiguration-flow:
     status: exempt
     comment: No configuration parameters to reconfigure after initial setup
-  repair-issues:
-    status: exempt
-    comment: Integration manages local data only, no external services to repair
+  repair-issues: todo
   stale-devices:
     status: exempt
     comment: No external devices to become stale, all data is locally managed
 
   # Platinum
-  async-dependency:
-    status: exempt
-    comment: Integration has no external dependencies requiring async support
-  inject-websession:
-    status: exempt
-    comment: Integration manages local data only, no web requests required
+  async-dependency: done
+  inject-websession: done
   strict-typing: done

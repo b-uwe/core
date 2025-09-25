@@ -1,9 +1,19 @@
 {
   "config": {
     "step": {
+      "user": {
+        "title": "Set up Music Favorites",
+        "description": "We will test MusicBrainz connectivity and set up your Music Favorites integration.",
+        "data": {}
+      },
       "confirm": {
         "description": "[%key:common::config_flow::description::confirm_setup%]"
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to MusicBrainz. Please check your internet connection and try again.",
+      "timeout": "Connection to MusicBrainz timed out. Please try again.",
+      "unknown": "An unexpected error occurred during setup. Please try again."
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
