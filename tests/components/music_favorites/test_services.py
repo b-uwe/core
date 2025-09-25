@@ -28,7 +28,9 @@ def mock_config_entry():
 
 
 @pytest.fixture
-async def setup_integration(hass: HomeAssistant, mock_config_entry):
+async def setup_integration(
+    hass: HomeAssistant, mock_config_entry, mock_musicbrainz_client
+):
     """Set up the integration for testing."""
     mock_config_entry.add_to_hass(hass)
 

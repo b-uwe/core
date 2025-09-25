@@ -1,6 +1,9 @@
 """Test Music Favorites integration setup and teardown."""
+# All tests are currently Claude Code-written, which needs to change, apparently
+# But for now, that's much better than me fiddling with a thing I don't understand
 
 from datetime import timedelta
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.components.music_favorites import async_setup
 from homeassistant.components.music_favorites.const import DOMAIN
@@ -12,26 +15,43 @@ from tests.common import MockConfigEntry
 
 async def test_setup_entry_success(hass: HomeAssistant) -> None:
     """Test successful setup of a config entry."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Music Favorites",
-        data={"favorites": {"test-id": ["Test Band"]}},
-        unique_id="music_favorites_unique_id",
-    )
-    entry.add_to_hass(hass)
+    # Import and patch the actual import location in __init__.py
 
-    # Test the actual setup - no mocking needed for basic success case
-    result = await hass.config_entries.async_setup(entry.entry_id)
+    with patch(
+        "homeassistant.components.music_favorites.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+        mock_client.search_artists.return_value = [
+            {"id": "test", "name": "Test", "disambiguation": "", "score": 100}
+        ]
 
-    assert result is True
-    assert entry.state is ConfigEntryState.LOADED
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Music Favorites",
+            data={"favorites": {"test-id": ["Test Band"]}},
+            unique_id="music_favorites_unique_id",
+        )
+        entry.add_to_hass(hass)
 
-    # Verify runtime_data is set up correctly
-    assert entry.runtime_data is not None
-    assert "update_interval" in entry.runtime_data
+        # Test the actual setup with mocked MusicBrainz
+        result = await hass.config_entries.async_setup(entry.entry_id)
+
+        assert result is True
+        assert entry.state is ConfigEntryState.LOADED
+
+        # Verify MusicBrainz was called
+        mock_client.search_artists.assert_called_once()
+
+        # Verify runtime_data is set up correctly
+        assert entry.runtime_data is not None
+        assert "update_interval" in entry.runtime_data
+        assert "musicbrainz_client" in entry.runtime_data
 
 
-async def test_unload_entry_success(hass: HomeAssistant) -> None:
+async def test_unload_entry_success(
+    hass: HomeAssistant, mock_musicbrainz_client
+) -> None:
     """Test successful unloading of a config entry."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -69,11 +89,14 @@ async def test_service_registration(hass: HomeAssistant) -> None:
     assert hass.services.has_service(DOMAIN, "remove_favorite")
 
 
-async def test_singleton_behavior(hass: HomeAssistant) -> None:
+async def test_singleton_behavior(hass: HomeAssistant, mock_musicbrainz_client) -> None:
     """Test that only one config entry can exist (singleton pattern)."""
     # First config flow should succeed
     result1 = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
+    )
+    result1 = await hass.config_entries.flow.async_configure(
+        result1["flow_id"], user_input={}
     )
     assert result1["type"] == "create_entry"
     assert result1["title"] == "Music Favorites"
@@ -91,7 +114,9 @@ async def test_singleton_behavior(hass: HomeAssistant) -> None:
     assert entries[0].unique_id == "music_favorites"
 
 
-async def test_runtime_data_structure(hass: HomeAssistant) -> None:
+async def test_runtime_data_structure(
+    hass: HomeAssistant, mock_musicbrainz_client
+) -> None:
     """Test that runtime_data is properly structured."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -109,6 +134,7 @@ async def test_runtime_data_structure(hass: HomeAssistant) -> None:
     assert entry.runtime_data is not None
     assert isinstance(entry.runtime_data, dict)
     assert "update_interval" in entry.runtime_data
+    assert "musicbrainz_client" in entry.runtime_data
 
     # Verify it's actually a timedelta
     assert isinstance(entry.runtime_data["update_interval"], timedelta)
