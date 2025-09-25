@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import voluptuous as vol
 
@@ -22,12 +23,16 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_import(self, imported_data=None) -> ConfigFlowResult:
+    async def async_step_import(
+        self, imported_data: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle import from YAML configuration. Just forwarding..."""
 
         return await self.async_step_user()
 
-    async def async_step_user(self, user_input=None) -> ConfigFlowResult:
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle the UI Config Flow Creation - which comes without a form."""
 
         # Set unique ID to prevent multiple instances of this service integration
