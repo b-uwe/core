@@ -84,7 +84,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
 
                 # Create success response
                 response = intent.IntentResponse(language="en")
-                response.async_set_speech(f"No longer tracking {artist_name}")
+                response.async_set_speech(f"No longer tracking {artist_name.upper()}")
                 _LOGGER.debug("Successfully removed '%s'", artist_name)
                 return ConversationResult(response=response)
 
@@ -92,7 +92,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 _LOGGER.debug("Failed to remove '%s': %s", artist_name, e)
                 response = intent.IntentResponse(language="en")
                 response.async_set_speech(
-                    f"Failed to remove {artist_name} from your favorites"
+                    f"Failed to remove {artist_name.upper()} from your favorites"
                 )
                 return ConversationResult(response=response)
 
@@ -125,7 +125,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
 
                 # Create success response
                 response = intent.IntentResponse(language="en")
-                response.async_set_speech(f"Now tracking {artist_name}")
+                response.async_set_speech(f"Now tracking {artist_name.upper()}")
                 _LOGGER.debug("Successfully added '%s'", artist_name)
                 return ConversationResult(response=response)
 
@@ -133,7 +133,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 _LOGGER.debug("Failed to add '%s': %s", artist_name, e)
                 response = intent.IntentResponse(language="en")
                 response.async_set_speech(
-                    f"Failed to add {artist_name}. They might already be in your favorites."
+                    f"Failed to add {artist_name.upper()}. They might already be in your favorites."
                 )
                 return ConversationResult(response=response)
 

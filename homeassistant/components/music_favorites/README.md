@@ -54,7 +54,7 @@ Use Home Assistant's Assist feature with these natural language commands:
 
 ### Service Actions
 
-The integration provides the following service action:
+The integration provides the following service actions:
 
 #### `music_favorites.add_favorite`
 
@@ -71,6 +71,21 @@ service: music_favorites.add_favorite
 data:
   name: "Pink Floyd"
   type: "band"
+```
+
+#### `music_favorites.remove_favorite`
+
+Removes an artist from your favorites collection.
+
+**Parameters**:
+- `name` (required): Name of the artist or band to remove
+- `config_entry` (optional): Specific config entry ID (auto-detected if not provided)
+
+**Example**:
+```yaml
+service: music_favorites.remove_favorite
+data:
+  name: "Pink Floyd"
 ```
 
 ## Entities
