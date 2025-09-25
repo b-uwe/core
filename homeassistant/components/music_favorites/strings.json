@@ -11,6 +11,24 @@
       "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
     }
   },
+  "entity": {
+    "sensor": {
+      "favorite_act": {
+        "name": "{favorite_name}",
+        "state": {
+          "unknown": "No recent updates"
+        },
+        "state_attributes": {
+          "musicbrainz_id": {
+            "name": "MusicBrainz ID"
+          },
+          "variants": {
+            "name": "Name variants"
+          }
+        }
+      }
+    }
+  },
   "services": {
     "add_favorite": {
       "name": "Add favorite",
