@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
+from .musicbrainz import MusicBrainzClient, MusicBrainzError
+
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -27,12 +29,10 @@ async def add_favorite(
     hass: HomeAssistant,
     entry: ConfigEntry,
     name: str,
-    favorite_type: str,
+    musicbrainz_id: str,
 ) -> None:
     """Add a new favorite to the collection."""
-    # Generate dummy MusicBrainz ID
-    musicbrainz_id = f"dummy-{name.lower().replace(' ', '-')}"
-    _LOGGER.debug("Adding favorite: %s (%s) - %s", name, favorite_type, musicbrainz_id)
+    _LOGGER.debug("Adding favorite: %s - %s", name, musicbrainz_id)
 
     # Get current favorites
     current_favorites = dict(entry.data.get("favorites", {}))
@@ -91,10 +91,89 @@ async def remove_favorite(
     entity_registry = er.async_get(hass)
 
     # Find and remove the entity for this favorite
-    unique_id = f"music_favorites_favorite_{musicbrainz_id_to_remove}"
+    unique_id = f"favorite_{musicbrainz_id_to_remove}"
     if entity_id := entity_registry.async_get_entity_id(
         "sensor", "music_favorites", unique_id
     ):
         entity_registry.async_remove(entity_id)
 
+    # For removals, we need to reload the platform to update the UI
+    # This ensures the entity disappears from the device page
+    await hass.config_entries.async_reload(entry.entry_id)
+
     _LOGGER.info("Successfully removed favorite: %s", name)
+
+
+async def resolve_artist_from_name(
+    hass: HomeAssistant,
+    artist_name: str,
+) -> dict[str, str | list[dict[str, str]]] | None:
+    """Resolve artist name to MusicBrainz ID using the decision logic.
+
+    Args:
+        hass: Home Assistant instance
+        artist_name: The artist name to search for
+
+    Returns:
+        Dictionary with one of:
+        - {"action": "create", "name": "exact_name", "musicbrainz_id": "id"} - Exact match found
+        - {"action": "choose", "options": [{"name": "...", "musicbrainz_id": "..."}, ...]} - Multiple matches
+        - {"action": "not_found"} - No matches found
+        - None if MusicBrainz API error
+    """
+    _LOGGER.debug("Resolving artist name: '%s'", artist_name)
+
+    try:
+        client = MusicBrainzClient(hass)
+        matches = await client.search_artists(artist_name, limit=10)
+
+        _LOGGER.debug(
+            "MusicBrainz returned %d matches for '%s'", len(matches), artist_name
+        )
+
+        # Case 1: No matches found
+        if len(matches) == 0:
+            _LOGGER.info("No MusicBrainz matches found for '%s'", artist_name)
+            return {"action": "not_found"}
+
+        # Case 2: Exactly 1 match AND exact name match (case insensitive)
+        if len(matches) == 1 and matches[0]["name"].lower() == artist_name.lower():
+            _LOGGER.info(
+                "Exact match found for '%s': %s (%s)",
+                artist_name,
+                matches[0]["name"],
+                matches[0]["id"],
+            )
+            return {
+                "action": "create",
+                "name": matches[0]["name"],  # Use the exact name from MusicBrainz
+                "musicbrainz_id": matches[0]["id"],
+                "aliases": matches[0].get("aliases", []),
+            }
+
+        # Case 3: Multiple matches OR single match with different name
+        _LOGGER.info(
+            "Multiple matches found for '%s', user needs to choose", artist_name
+        )
+        options = [
+            {
+                "name": match["name"],
+                "musicbrainz_id": match["id"],
+                "disambiguation": match.get("disambiguation", ""),
+                "score": match.get("score", 0),
+                "aliases": match.get("aliases", []),
+            }
+            for match in matches[:5]  # Limit to top 5 options
+        ]
+
+        return {"action": "choose", "options": options}  # noqa: TRY300, conflicts ´with RET505 🤷
+
+    except MusicBrainzError as err:
+        _LOGGER.error(
+            "MusicBrainz API error while resolving '%s': %s", artist_name, err
+        )
+        return None
+    except Exception:
+        # Broad catch for any unexpected errors during artist resolution
+        _LOGGER.exception("Unexpected error while resolving '%s'", artist_name)
+        return None

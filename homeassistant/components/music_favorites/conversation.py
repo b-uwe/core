@@ -12,7 +12,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import intent
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .models import add_favorite, remove_favorite
+from .models import add_favorite, remove_favorite, resolve_artist_from_name
 from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -118,20 +118,74 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 )
             ).strip()
             _LOGGER.debug("Track/add request for: '%s'", artist_name)
+            response = intent.IntentResponse(language="en")
 
             try:
-                # Add the favorite
-                await add_favorite(self.hass, self._entry, artist_name, "band")
+                # Resolve artist name using MusicBrainz
+                resolution = await resolve_artist_from_name(self.hass, artist_name)
 
-                # Create success response
-                response = intent.IntentResponse(language="en")
-                response.async_set_speech(f"Now tracking {artist_name.upper()}")
-                _LOGGER.debug("Successfully added '%s'", artist_name)
-                return ConversationResult(response=response)
+                if resolution is None:
+                    # MusicBrainz API error
+                    response.async_set_speech(
+                        f"Sorry, I couldn't connect to the music database to add {artist_name}. Please try again later."
+                    )
+                    return ConversationResult(response=response)
+
+                if resolution["action"] == "not_found":
+                    # No matches found
+                    response.async_set_speech(
+                        f"Sorry, I couldn't find any artist named {artist_name} in the music database."
+                    )
+                    return ConversationResult(response=response)
+
+                if resolution["action"] == "create":
+                    # Exact match found - add the favorite
+                    artist_name_resolved = str(resolution["name"])
+                    musicbrainz_id = str(resolution["musicbrainz_id"])
+                    await add_favorite(
+                        self.hass,
+                        self._entry,
+                        artist_name_resolved,
+                        musicbrainz_id,
+                    )
+                    response.async_set_speech(
+                        f"Now tracking {artist_name_resolved.upper()}"
+                    )
+                    _LOGGER.debug(
+                        "Successfully added '%s' (%s)",
+                        artist_name_resolved,
+                        musicbrainz_id,
+                    )
+                    return ConversationResult(response=response)
+
+                if resolution["action"] == "choose":
+                    # Multiple matches - need user to choose
+                    # For now, just take the first option (highest score)
+                    # TO DO: Implement proper choice mechanism
+                    options = resolution["options"]
+                    if isinstance(options, list) and len(options) > 0:
+                        best_match = options[0]
+                        best_match_name = str(best_match["name"])
+                        best_match_id = str(best_match["musicbrainz_id"])
+                        await add_favorite(
+                            self.hass,
+                            self._entry,
+                            best_match_name,
+                            best_match_id,
+                        )
+                        response.async_set_speech(
+                            f"Found multiple matches for {artist_name}. Adding the best match: {best_match_name.upper()}"
+                        )
+                        _LOGGER.debug(
+                            "Added best match '%s' (%s) for search '%s'",
+                            best_match_name,
+                            best_match_id,
+                            artist_name,
+                        )
+                        return ConversationResult(response=response)
 
             except ServiceValidationError as e:
                 _LOGGER.debug("Failed to add '%s': %s", artist_name, e)
-                response = intent.IntentResponse(language="en")
                 response.async_set_speech(
                     f"Failed to add {artist_name.upper()}. They might already be in your favorites."
                 )
