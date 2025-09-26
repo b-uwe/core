@@ -2,6 +2,9 @@
   "services": {
     "add_favorite": {
       "service": "mdi:heart-plus"
+    },
+    "remove_favorite": {
+      "service": "mdi:heart-minus"
     }
   }
 }

@@ -44,21 +44,23 @@
       "name": "Add favorite",
       "description": "Add a new favorite band or artist to your collection.",
       "fields": {
-        "config_entry": {
-          "name": "Music Favorites",
-          "description": "The Music Favorites instance to add to."
-        },
         "name": {
           "name": "Name",
           "description": "The name of the band or artist."
         },
-        "type": {
-          "name": "Type",
-          "description": "Whether this is a band or solo artist."
-        },
         "musicbrainz_id": {
           "name": "MusicBrainz ID",
           "description": "The unique MusicBrainz identifier for this band or artist."
+        }
+      }
+    },
+    "remove_favorite": {
+      "name": "Remove favorite",
+      "description": "Remove an artist or band from your music favorites.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name of the artist or band to remove."
         }
       }
     }

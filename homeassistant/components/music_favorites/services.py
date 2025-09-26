@@ -19,15 +19,13 @@ _LOGGER = logging.getLogger(__name__)
 # Service schemas
 ADD_FAVORITE_SCHEMA = vol.Schema(
     {
-        vol.Optional("config_entry"): str,
         vol.Required("name"): str,
-        vol.Required("type"): vol.In(["band", "artist"]),
+        vol.Required("musicbrainz_id"): str,
     }
 )
 
 REMOVE_FAVORITE_SCHEMA = vol.Schema(
     {
-        vol.Optional("config_entry"): str,
         vol.Required("name"): str,
     }
 )
@@ -65,9 +63,8 @@ async def add_favorite_service(call: ServiceCall) -> None:
     target_entry = _get_target_entry(hass, call)
 
     _LOGGER.debug(
-        "Adding favorite '%s' (type: %s) to entry %s",
+        "Adding favorite '%s' to entry %s",
         call.data["name"],
-        call.data["type"],
         target_entry.entry_id,
     )
 
@@ -75,7 +72,7 @@ async def add_favorite_service(call: ServiceCall) -> None:
         hass,
         target_entry,
         call.data["name"],
-        call.data["type"],
+        call.data["musicbrainz_id"],
     )
 
     _LOGGER.debug("Successfully added favorite '%s'", call.data["name"])
