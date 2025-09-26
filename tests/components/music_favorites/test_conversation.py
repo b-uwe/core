@@ -72,24 +72,38 @@ class MockUserInput:
 async def test_track_command_success(hass: HomeAssistant, conversation_entity) -> None:
     """Test successful 'track' command."""
     with patch(
-        "homeassistant.components.music_favorites.conversation.add_favorite"
-    ) as mock_add:
-        mock_add.return_value = None
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {
+            "action": "create",
+            "name": "Motörhead",
+            "musicbrainz_id": "f0d05c64-9959-4ae1-899b-acf51b97638c",
+        }
 
-        user_input = MockUserInput("track Motörhead")
-        result = await conversation_entity._async_handle_message(user_input, None)
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.return_value = None
 
-        # Verify response (text is shown as UPPERCASE)
-        assert (
-            "Now tracking MOTÖRHEAD"
-            in result.response.as_dict()["speech"]["plain"]["speech"]
-        )
+            user_input = MockUserInput("track Motörhead")
+            result = await conversation_entity._async_handle_message(user_input, None)
 
-        # Verify add_favorite was called
-        mock_add.assert_called_once()
-        call_args = mock_add.call_args[0]
-        assert call_args[2] == "motörhead"  # name (normalized to lowercase)
-        assert call_args[3] == "band"  # type
+            # Verify response (text is shown as UPPERCASE)
+            assert (
+                "Now tracking MOTÖRHEAD"
+                in result.response.as_dict()["speech"]["plain"]["speech"]
+            )
+
+            # Verify resolve was called
+            mock_resolve.assert_called_once_with(hass, "motörhead")
+
+            # Verify add_favorite was called with MusicBrainz data
+            mock_add.assert_called_once()
+            call_args = mock_add.call_args[0]
+            assert call_args[2] == "Motörhead"  # resolved name
+            assert (
+                call_args[3] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            )  # musicbrainz_id
 
 
 async def test_track_command_short_syntax(
@@ -97,24 +111,38 @@ async def test_track_command_short_syntax(
 ) -> None:
     """Test successful '+' shorthand command."""
     with patch(
-        "homeassistant.components.music_favorites.conversation.add_favorite"
-    ) as mock_add:
-        mock_add.return_value = None
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {
+            "action": "create",
+            "name": "Iron Maiden",
+            "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+        }
 
-        user_input = MockUserInput("+ Iron Maiden")
-        result = await conversation_entity._async_handle_message(user_input, None)
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.return_value = None
 
-        # Verify response (shown as UPPERCASE)
-        assert (
-            "Now tracking IRON MAIDEN"
-            in result.response.as_dict()["speech"]["plain"]["speech"]
-        )
+            user_input = MockUserInput("+ Iron Maiden")
+            result = await conversation_entity._async_handle_message(user_input, None)
 
-        # Verify add_favorite was called
-        mock_add.assert_called_once()
-        call_args = mock_add.call_args[0]
-        assert call_args[2] == "iron maiden"  # name (normalized to lowercase)
-        assert call_args[3] == "band"  # type
+            # Verify response (shown as UPPERCASE)
+            assert (
+                "Now tracking IRON MAIDEN"
+                in result.response.as_dict()["speech"]["plain"]["speech"]
+            )
+
+            # Verify resolve was called
+            mock_resolve.assert_called_once_with(hass, "iron maiden")
+
+            # Verify add_favorite was called with MusicBrainz data
+            mock_add.assert_called_once()
+            call_args = mock_add.call_args[0]
+            assert call_args[2] == "Iron Maiden"  # resolved name
+            assert (
+                call_args[3] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+            )  # musicbrainz_id
 
 
 async def test_add_to_favorites_command(
@@ -122,23 +150,38 @@ async def test_add_to_favorites_command(
 ) -> None:
     """Test 'add to music favorites' command."""
     with patch(
-        "homeassistant.components.music_favorites.conversation.add_favorite"
-    ) as mock_add:
-        mock_add.return_value = None
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {
+            "action": "create",
+            "name": "Black Sabbath",
+            "musicbrainz_id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+        }
 
-        user_input = MockUserInput("add Black Sabbath to music favorites")
-        result = await conversation_entity._async_handle_message(user_input, None)
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.return_value = None
 
-        # Verify response (shown as UPPERCASE)
-        assert (
-            "Now tracking BLACK SABBATH"
-            in result.response.as_dict()["speech"]["plain"]["speech"]
-        )
+            user_input = MockUserInput("add Black Sabbath to music favorites")
+            result = await conversation_entity._async_handle_message(user_input, None)
 
-        # Verify add_favorite was called
-        mock_add.assert_called_once()
-        call_args = mock_add.call_args[0]
-        assert call_args[2] == "black sabbath"  # name (normalized to lowercase)
+            # Verify response (shown as UPPERCASE)
+            assert (
+                "Now tracking BLACK SABBATH"
+                in result.response.as_dict()["speech"]["plain"]["speech"]
+            )
+
+            # Verify resolve was called
+            mock_resolve.assert_called_once_with(hass, "black sabbath")
+
+            # Verify add_favorite was called with MusicBrainz data
+            mock_add.assert_called_once()
+            call_args = mock_add.call_args[0]
+            assert call_args[2] == "Black Sabbath"  # resolved name
+            assert (
+                call_args[3] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
+            )  # musicbrainz_id
 
 
 async def test_untrack_command_success(
@@ -214,19 +257,64 @@ async def test_remove_from_favorites_command(
 
 
 async def test_track_command_failure(hass: HomeAssistant, conversation_entity) -> None:
-    """Test track command when add_favorite fails."""
+    """Test track command when resolve_artist_from_name fails."""
+    # Test MusicBrainz API error (returns None)
     with patch(
-        "homeassistant.components.music_favorites.conversation.add_favorite"
-    ) as mock_add:
-        mock_add.side_effect = ServiceValidationError("Already exists")
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = None
 
         user_input = MockUserInput("track Motörhead")
         result = await conversation_entity._async_handle_message(user_input, None)
 
-        # Verify error response (shown as UPPERCASE)
+        # Verify error response
         response_text = result.response.as_dict()["speech"]["plain"]["speech"]
-        assert "Failed to add MOTÖRHEAD" in response_text
-        assert "already be in your favorites" in response_text
+        assert "couldn't connect to the music database" in response_text
+        assert "motörhead" in response_text  # name is normalized to lowercase
+
+
+async def test_track_command_not_found(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test track command when artist is not found in MusicBrainz."""
+    with patch(
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {"action": "not_found"}
+
+        user_input = MockUserInput("track NonExistentBand")
+        result = await conversation_entity._async_handle_message(user_input, None)
+
+        # Verify error response
+        response_text = result.response.as_dict()["speech"]["plain"]["speech"]
+        assert "couldn't find any artist named nonexistentband" in response_text
+
+
+async def test_track_command_add_favorite_failure(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test track command when add_favorite fails after successful resolution."""
+    with patch(
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {
+            "action": "create",
+            "name": "Motörhead",
+            "musicbrainz_id": "f0d05c64-9959-4ae1-899b-acf51b97638c",
+        }
+
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.side_effect = ServiceValidationError("Already exists")
+
+            user_input = MockUserInput("track Motörhead")
+            result = await conversation_entity._async_handle_message(user_input, None)
+
+            # Verify error response (shown as UPPERCASE)
+            response_text = result.response.as_dict()["speech"]["plain"]["speech"]
+            assert "Failed to add MOTÖRHEAD" in response_text
+            assert "already be in your favorites" in response_text
 
 
 async def test_untrack_command_failure(
@@ -271,23 +359,38 @@ async def test_empty_command(hass: HomeAssistant, conversation_entity) -> None:
 async def test_whitespace_handling(hass: HomeAssistant, conversation_entity) -> None:
     """Test commands with extra whitespace."""
     with patch(
-        "homeassistant.components.music_favorites.conversation.add_favorite"
-    ) as mock_add:
-        mock_add.return_value = None
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {
+            "action": "create",
+            "name": "Motörhead",
+            "musicbrainz_id": "f0d05c64-9959-4ae1-899b-acf51b97638c",
+        }
 
-        user_input = MockUserInput("  track   Motörhead  ")
-        result = await conversation_entity._async_handle_message(user_input, None)
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.return_value = None
 
-        # Verify response (shown as UPPERCASE, but internal name normalized to lowercase and stripped)
-        assert (
-            "Now tracking MOTÖRHEAD"
-            in result.response.as_dict()["speech"]["plain"]["speech"]
-        )
+            user_input = MockUserInput("  track   Motörhead  ")
+            result = await conversation_entity._async_handle_message(user_input, None)
 
-        # Verify add_favorite was called with cleaned name
-        mock_add.assert_called_once()
-        call_args = mock_add.call_args[0]
-        assert call_args[2] == "motörhead"  # name should be stripped and lowercase
+            # Verify response (shown as UPPERCASE)
+            assert (
+                "Now tracking MOTÖRHEAD"
+                in result.response.as_dict()["speech"]["plain"]["speech"]
+            )
+
+            # Verify resolve was called with cleaned name
+            mock_resolve.assert_called_once_with(hass, "motörhead")
+
+            # Verify add_favorite was called with MusicBrainz data
+            mock_add.assert_called_once()
+            call_args = mock_add.call_args[0]
+            assert call_args[2] == "Motörhead"  # resolved name
+            assert (
+                call_args[3] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            )  # musicbrainz_id
 
 
 async def test_case_insensitive_commands(
@@ -295,21 +398,38 @@ async def test_case_insensitive_commands(
 ) -> None:
     """Test that commands work regardless of case."""
     with patch(
-        "homeassistant.components.music_favorites.conversation.add_favorite"
-    ) as mock_add:
-        mock_add.return_value = None
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        mock_resolve.return_value = {
+            "action": "create",
+            "name": "Motörhead",
+            "musicbrainz_id": "f0d05c64-9959-4ae1-899b-acf51b97638c",
+        }
 
-        user_input = MockUserInput("TRACK Motörhead")
-        result = await conversation_entity._async_handle_message(user_input, None)
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.return_value = None
 
-        # Verify response (shown as UPPERCASE)
-        assert (
-            "Now tracking MOTÖRHEAD"
-            in result.response.as_dict()["speech"]["plain"]["speech"]
-        )
+            user_input = MockUserInput("TRACK Motörhead")
+            result = await conversation_entity._async_handle_message(user_input, None)
 
-        # Verify add_favorite was called
-        mock_add.assert_called_once()
+            # Verify response (shown as UPPERCASE)
+            assert (
+                "Now tracking MOTÖRHEAD"
+                in result.response.as_dict()["speech"]["plain"]["speech"]
+            )
+
+            # Verify resolve was called with normalized name
+            mock_resolve.assert_called_once_with(hass, "motörhead")
+
+            # Verify add_favorite was called with MusicBrainz data
+            mock_add.assert_called_once()
+            call_args = mock_add.call_args[0]
+            assert call_args[2] == "Motörhead"  # resolved name
+            assert (
+                call_args[3] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            )  # musicbrainz_id
 
 
 async def test_conversation_platform_setup(
