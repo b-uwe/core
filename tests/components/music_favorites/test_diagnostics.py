@@ -1,6 +1,7 @@
 """Test Music Favorites diagnostics functionality."""
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from tests.common import MockConfigEntry
 from tests.components.diagnostics import get_diagnostics_for_config_entry
@@ -93,3 +94,65 @@ async def test_entry_diagnostics_no_favorites(
     # Verify empty favorites data
     assert result["favorites_data"] == {}
     assert result["entity_states"] == {}
+
+
+async def test_entry_diagnostics_with_entity_states(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    mock_musicbrainz_client,
+) -> None:
+    """Test config entry diagnostics that includes entity states."""
+    entry = MockConfigEntry(
+        domain="music_favorites",
+        title="Music Favorites",
+        data={
+            "favorites": {
+                "test-id-1": ["Test Band", "TB"],
+                "test-id-2": ["Solo Artist"],
+            }
+        },
+        unique_id="music_favorites",
+    )
+    entry.add_to_hass(hass)
+
+    # Set up the integration and wait for entities to be created
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Create a mock entity state for one of the favorites
+    # This will trigger the entity_states logic in diagnostics
+    entity_registry = er.async_get(hass)
+
+    # Register a sensor entity for test-id-1
+    entity_registry.async_get_or_create(
+        "sensor",
+        "music_favorites",
+        "music_favorites_favorite_test-id-1",
+        suggested_object_id="test_band_favorite",
+    )
+
+    # Set a state for this entity
+    hass.states.async_set(
+        "sensor.test_band_favorite",
+        "tracked",
+        {
+            "musicbrainz_id": "test-id-1",
+            "display_name": "Test Band",
+            "variant_count": 1,
+            "variants": ["TB"],
+        },
+    )
+
+    await hass.async_block_till_done()
+
+    result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
+
+    # Verify that entity states are now included
+    entity_states = result["entity_states"]
+    assert "Test Band" in entity_states
+
+    # Verify the entity state data
+    test_band_state = entity_states["Test Band"]
+    assert test_band_state["state"] == "tracked"
+    assert test_band_state["attributes"]["musicbrainz_id"] == "test-id-1"
+    assert test_band_state["attributes"]["display_name"] == "Test Band"

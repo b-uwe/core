@@ -1,6 +1,6 @@
 """Test Music Favorites service functionality."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import voluptuous as vol
@@ -9,8 +9,9 @@ from homeassistant.components.music_favorites.const import DOMAIN
 from homeassistant.components.music_favorites.services import (
     ADD_FAVORITE_SCHEMA,
     REMOVE_FAVORITE_SCHEMA,
+    _get_target_entry,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceNotFound, ServiceValidationError
 
 from tests.common import MockConfigEntry
@@ -302,3 +303,18 @@ async def test_service_config_entry_not_loaded_after_setup(
             },
             blocking=True,
         )
+
+
+async def test_get_target_entry_nonexistent_config_entry_id(
+    hass: HomeAssistant, setup_integration
+) -> None:
+    """Test _get_target_entry with a non-existent config entry ID."""
+    # Create a mock service call with a non-existent config_entry_id
+    mock_call = Mock(spec=ServiceCall)
+    mock_call.data = {"config_entry": "nonexistent-id"}
+
+    # This should raise a ServiceValidationError
+    with pytest.raises(
+        ServiceValidationError, match="Config entry nonexistent-id not found"
+    ):
+        _get_target_entry(hass, mock_call)

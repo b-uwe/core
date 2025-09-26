@@ -189,6 +189,44 @@ async def test_user_flow_client_error(hass: HomeAssistant) -> None:
         assert result["errors"]["base"] == "cannot_connect"
 
 
+async def test_user_flow_connector_error(hass: HomeAssistant) -> None:
+    """Test config flow with connection error (DNS, network unreachable, etc.)."""
+    with (
+        patch(
+            "homeassistant.components.music_favorites.musicbrainz.MusicBrainzClient"
+        ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.config_flow.MusicBrainzClient"
+        ) as mock_client_class_config,
+        patch(
+            "homeassistant.components.music_favorites.MusicBrainzClient"
+        ) as mock_client_class_init,
+    ):
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+        mock_client_class_config.return_value = mock_client
+        mock_client_class_init.return_value = mock_client
+
+        # Create a ClientConnectorError that can be logged properly
+        class MockConnectorError(aiohttp.ClientConnectorError):
+            def __str__(self):
+                return "Cannot connect to host musicbrainz.org:443"
+
+        # Create instance without calling parent __init__ to avoid required parameters
+        connector_error = MockConnectorError.__new__(MockConnectorError)
+        mock_client.search_artists.side_effect = connector_error
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={}
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"]["base"] == "cannot_connect"
+
+
 async def test_user_flow_timeout_error(hass: HomeAssistant) -> None:
     """Test config flow with timeout error."""
     with (

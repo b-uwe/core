@@ -5,10 +5,12 @@
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
-from homeassistant.components.music_favorites import async_setup
+from homeassistant.components.music_favorites import _init_flow, async_setup
 from homeassistant.components.music_favorites.const import DOMAIN
+from homeassistant.components.music_favorites.musicbrainz import MusicBrainzError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import UnknownFlow
 
 from tests.common import MockConfigEntry
 
@@ -139,3 +141,34 @@ async def test_runtime_data_structure(
     # Verify it's actually a timedelta
     assert isinstance(entry.runtime_data["update_interval"], timedelta)
     assert entry.runtime_data["update_interval"] == timedelta(hours=6)
+
+
+async def test_init_flow_unknown_flow_exception(hass: HomeAssistant) -> None:
+    """Test _init_flow handles UnknownFlow exception gracefully."""
+    with patch.object(hass.config_entries.flow, "async_init", side_effect=UnknownFlow):
+        # This should not raise an exception - it should catch and log
+        await _init_flow(hass)
+
+
+async def test_setup_entry_musicbrainz_error(hass: HomeAssistant) -> None:
+    """Test setup entry with MusicBrainzError raises ConfigEntryNotReady."""
+    with patch(
+        "homeassistant.components.music_favorites.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+        mock_client.search_artists.side_effect = MusicBrainzError("API unavailable")
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            title="Music Favorites",
+            data={"favorites": {"test-id": ["Test Band"]}},
+            unique_id="music_favorites_unique_id",
+        )
+        entry.add_to_hass(hass)
+
+        # Setup should return False and set state to SETUP_RETRY
+        # because ConfigEntryNotReady triggers Home Assistant's retry logic
+        result = await hass.config_entries.async_setup(entry.entry_id)
+        assert result is False
+        assert entry.state is ConfigEntryState.SETUP_RETRY

@@ -465,3 +465,75 @@ async def test_conversation_entity_properties(
     assert entity.name == "Music Favorites Assistant"
     assert entity.unique_id == f"{setup_integration.entry_id}_conversation"
     assert entity.supported_languages == ["en"]
+
+
+async def test_track_command_multiple_matches_choose_best(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test track command with multiple matches - chooses the best match."""
+    with patch(
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        # Mock multiple matches scenario
+        mock_resolve.return_value = {
+            "action": "choose",
+            "options": [
+                {
+                    "name": "Black Sabbath",
+                    "musicbrainz_id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+                    "score": 100,
+                    "disambiguation": "British heavy metal band",
+                },
+                {
+                    "name": "Black Sabbath",
+                    "musicbrainz_id": "different-id",
+                    "score": 95,
+                    "disambiguation": "Tribute band",
+                },
+            ],
+        }
+
+        with patch(
+            "homeassistant.components.music_favorites.conversation.add_favorite"
+        ) as mock_add:
+            mock_add.return_value = None
+
+            user_input = MockUserInput("track Black Sabbath")
+            result = await conversation_entity._async_handle_message(user_input, None)
+
+            # Verify response mentions multiple matches and best match selection
+            speech = result.response.as_dict()["speech"]["plain"]["speech"]
+            assert "Found multiple matches for black sabbath" in speech
+            assert "Adding the best match: BLACK SABBATH" in speech
+
+            # Verify resolve was called
+            mock_resolve.assert_called_once_with(hass, "black sabbath")
+
+            # Verify add_favorite was called with the best match (first option)
+            mock_add.assert_called_once()
+            call_args = mock_add.call_args
+            assert call_args[0][2] == "Black Sabbath"  # name
+            assert (
+                call_args[0][3] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
+            )  # musicbrainz_id
+
+
+async def test_track_command_multiple_matches_empty_options(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test track command with multiple matches but empty options list."""
+    with patch(
+        "homeassistant.components.music_favorites.conversation.resolve_artist_from_name"
+    ) as mock_resolve:
+        # Mock multiple matches with empty options
+        mock_resolve.return_value = {
+            "action": "choose",
+            "options": [],  # Empty options list
+        }
+
+        user_input = MockUserInput("track Some Artist")
+        result = await conversation_entity._async_handle_message(user_input, None)
+
+        # Should fall through to the "Unrecognized command" response
+        speech = result.response.as_dict()["speech"]["plain"]["speech"]
+        assert "Unrecognized command" in speech

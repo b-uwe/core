@@ -1,6 +1,6 @@
 """Test Music Favorites model functions."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -8,7 +8,9 @@ from homeassistant.components.music_favorites.const import DOMAIN
 from homeassistant.components.music_favorites.models import (
     add_favorite,
     remove_favorite,
+    resolve_artist_from_name,
 )
+from homeassistant.components.music_favorites.musicbrainz import MusicBrainzError
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
@@ -327,3 +329,218 @@ async def test_remove_favorite_empty_favorites(hass: HomeAssistant) -> None:
     # Try to remove from empty favorites
     with pytest.raises(ServiceValidationError, match="not found"):
         await remove_favorite(hass, empty_entry, "Any Band")
+
+
+# Tests for resolve_artist_from_name function
+
+
+async def test_resolve_artist_no_matches(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name when no matches found."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(return_value=[])
+
+        result = await resolve_artist_from_name(hass, "Unknown Band")
+
+        assert result == {"action": "not_found"}
+        mock_client.search_artists.assert_called_once_with("Unknown Band", limit=10)
+
+
+async def test_resolve_artist_exact_match(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name with exact single match."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            return_value=[
+                {
+                    "name": "Iron Maiden",
+                    "id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                    "aliases": ["Maiden"],
+                    "score": 100,
+                }
+            ]
+        )
+
+        result = await resolve_artist_from_name(hass, "iron maiden")
+
+        assert result == {
+            "action": "create",
+            "name": "Iron Maiden",
+            "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            "aliases": ["Maiden"],
+        }
+
+
+async def test_resolve_artist_exact_match_no_aliases(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name with exact match but no aliases."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            return_value=[
+                {
+                    "name": "Black Sabbath",
+                    "id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+                    "score": 100,
+                }
+            ]
+        )
+
+        result = await resolve_artist_from_name(hass, "Black Sabbath")
+
+        assert result == {
+            "action": "create",
+            "name": "Black Sabbath",
+            "musicbrainz_id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+            "aliases": [],
+        }
+
+
+async def test_resolve_artist_single_match_different_name(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name with single match but different name."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            return_value=[
+                {
+                    "name": "Iron Maiden",
+                    "id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                    "aliases": ["Maiden"],
+                    "score": 95,
+                    "disambiguation": "British heavy metal band",
+                }
+            ]
+        )
+
+        result = await resolve_artist_from_name(hass, "Maiden")
+
+        assert result["action"] == "choose"
+        assert len(result["options"]) == 1
+        assert result["options"][0] == {
+            "name": "Iron Maiden",
+            "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            "aliases": ["Maiden"],
+            "score": 95,
+            "disambiguation": "British heavy metal band",
+        }
+
+
+async def test_resolve_artist_multiple_matches(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name with multiple matches."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            return_value=[
+                {
+                    "name": "Black Sabbath",
+                    "id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+                    "score": 100,
+                    "disambiguation": "British heavy metal band",
+                },
+                {
+                    "name": "Black Sabbath",
+                    "id": "different-id",
+                    "score": 95,
+                    "disambiguation": "Tribute band",
+                    "aliases": ["BS Tribute"],
+                },
+            ]
+        )
+
+        result = await resolve_artist_from_name(hass, "Black Sabbath")
+
+        assert result["action"] == "choose"
+        assert len(result["options"]) == 2
+        assert result["options"][0]["name"] == "Black Sabbath"
+        assert result["options"][1]["aliases"] == ["BS Tribute"]
+
+
+async def test_resolve_artist_multiple_matches_limit_to_5(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name limits results to 5 options."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        # Return 8 matches
+        mock_client.search_artists = AsyncMock(
+            return_value=[
+                {
+                    "name": f"Black Sabbath {i}",
+                    "id": f"id-{i}",
+                    "score": 100 - i,
+                }
+                for i in range(8)
+            ]
+        )
+
+        result = await resolve_artist_from_name(hass, "Black Sabbath")
+
+        assert result["action"] == "choose"
+        assert len(result["options"]) == 5  # Limited to 5
+
+
+async def test_resolve_artist_missing_optional_fields(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name handles missing optional fields."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            return_value=[
+                {
+                    "name": "Minimal Band",
+                    "id": "minimal-id",
+                    # Missing aliases, score, disambiguation
+                }
+            ]
+        )
+
+        result = await resolve_artist_from_name(hass, "Different Name")
+
+        assert result["action"] == "choose"
+        assert len(result["options"]) == 1
+        option = result["options"][0]
+        assert option["name"] == "Minimal Band"
+        assert option["musicbrainz_id"] == "minimal-id"
+        assert option["aliases"] == []
+        assert option["score"] == 0
+        assert option["disambiguation"] == ""
+
+
+async def test_resolve_artist_musicbrainz_error(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name handles MusicBrainzError."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            side_effect=MusicBrainzError("API Error")
+        )
+
+        result = await resolve_artist_from_name(hass, "Test Artist")
+
+        assert result is None
+
+
+async def test_resolve_artist_generic_exception(hass: HomeAssistant) -> None:
+    """Test resolve_artist_from_name handles generic exceptions."""
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.search_artists = AsyncMock(
+            side_effect=ValueError("Unexpected error")
+        )
+
+        result = await resolve_artist_from_name(hass, "Test Artist")
+
+        assert result is None
