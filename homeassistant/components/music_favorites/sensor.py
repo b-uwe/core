@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import re
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -28,9 +29,14 @@ class FavoriteSensor(SensorEntity):
         self._favorite_variants = favorite_variants
         self._attr_name = favorite_variants[0]  # Display name for the entity
         self._attr_translation_key = "favorite_act"  # Translation key
-        self._attr_unique_id = f"music_favorites_favorite_{favorite_key}"
+        self._attr_unique_id = f"favorite_{favorite_key}"
         self._attr_device_info = device_info
-        self._attr_entity_id = f"music_favorites_{favorite_variants[0].lower()}"
+        # Create human-readable entity ID for easy YAML reference
+        # I rely on HA default behavior for duplicate entity ID's because
+        # what I had in mind to do, was basically the same
+        safe_name = re.sub(r"[^\w\s-]", "", favorite_variants[0].lower())
+        safe_name = re.sub(r"[-\s]+", "_", safe_name).strip("_")
+        self._attr_entity_id = f"sensor.music_favorites_{safe_name}"
         self._attr_icon = "mdi:guitar-electric"
         self._attr_has_entity_name = True
 
@@ -67,7 +73,7 @@ async def async_setup_entry(
 
     bands_device_info = DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_acts")},
-        name=f"{entry.title} - Bands & Artists",
+        name="Top Acts",
         manufacturer="Music Favorites Integration",
         model="Bands & Artists Collection",
         sw_version=VERSION,
