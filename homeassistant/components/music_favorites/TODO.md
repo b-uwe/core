@@ -34,7 +34,7 @@
   - [x] **Error handling** - Specific exceptions + broad catch with logging
   - [x] **Async implementation** - No blocking calls, proper websession injection
 - [x] Feed name into MusicBrainz to get an ID back
-- [x] Error handling for "not" found
+- [x] Error handling for "not found"
 - [x] Storing the ID from the first entry found
 - [ ] Handling multiple entries by asking back with the user
 - [x] Storing all Aliases
@@ -43,6 +43,7 @@
 - [ ] Attach BandsInTown
 - [ ] Pull Events
   - [ ] Reset entity-event-setup
+- [ ] Attribute the services used
 
 ### Phase 6: YAML Setup
 - [ ] Allow Setup 100% from YAML

@@ -71,9 +71,13 @@ async def add_favorite(
         entry, data={**entry.data, "favorites": current_favorites}
     )
 
-    # For additions, we need to reload the platform to create new entities
-    # This is the cleanest way to handle dynamic entity addition
-    await hass.config_entries.async_reload(entry.entry_id)
+    # Add the new entity dynamically using the entity manager
+    # Only add entity if runtime_data exists and contains entity_manager
+    # (during tests or before setup, this might not be available)
+    if hasattr(entry, "runtime_data") and entry.runtime_data:
+        entity_manager = entry.runtime_data.get("entity_manager")
+        if entity_manager:
+            entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
 
     _LOGGER.info("Successfully added favorite: %s", name)
 
@@ -110,7 +114,7 @@ async def remove_favorite(
         entry, data={**entry.data, "favorites": current_favorites}
     )
 
-    # Remove the old entity from entity registry
+    # Remove the entity from entity registry
     entity_registry = er.async_get(hass)
 
     # Find and remove the entity for this favorite
@@ -119,10 +123,6 @@ async def remove_favorite(
         "sensor", "music_favorites", unique_id
     ):
         entity_registry.async_remove(entity_id)
-
-    # For removals, we need to reload the platform to update the UI
-    # This ensures the entity disappears from the device page
-    await hass.config_entries.async_reload(entry.entry_id)
 
     _LOGGER.info("Successfully removed favorite: %s", favorite_name)
 

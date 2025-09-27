@@ -56,10 +56,9 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
     """Test successfully adding a new favorite."""
     mock_config_entry.add_to_hass(hass)
 
-    # Mock the config entry update and reload
+    # Mock the config entry update
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload") as mock_reload,
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
@@ -89,8 +88,45 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
             == expected_variants
         )
 
-        # Verify the config entry was reloaded (to create new entities)
-        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+        # Note: No longer reloading config entry - using dynamic entity management instead
+
+
+async def test_add_favorite_with_entity_manager(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """Test adding a favorite with entity manager present (dynamic entity creation)."""
+    mock_config_entry.add_to_hass(hass)
+
+    # Create mock entity manager
+    mock_entity_manager = MagicMock()
+    mock_config_entry.runtime_data = {"entity_manager": mock_entity_manager}
+
+    with (
+        patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
+    ):
+        mock_client = mock_client_class.return_value
+        mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
+
+        # Add a new favorite
+        await add_favorite(
+            hass,
+            mock_config_entry,
+            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",  # Half Me ID
+        )
+
+        # Verify the config entry was updated
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args
+        updated_data = call_args[1]["data"]["favorites"]
+        assert "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec" in updated_data
+
+        # Verify the entity manager was called to add the entity dynamically
+        mock_entity_manager.add_favorite_entity.assert_called_once_with(
+            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec", ["Half Me"]
+        )
 
 
 async def test_add_favorite_already_exists(
@@ -133,7 +169,6 @@ async def test_add_favorite_unicode_handling(
     # Mock the config entry update and reload
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload"),
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
@@ -178,7 +213,6 @@ async def test_remove_favorite_success(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
         # Remove an existing favorite by MusicBrainz ID
         await remove_favorite(
@@ -206,7 +240,7 @@ async def test_remove_favorite_success(
         )
 
         # Verify the config entry was reloaded (to update UI)
-        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+        # Note: No longer reloading config entry - using dynamic entity management instead
 
 
 async def test_remove_favorite_case_insensitive(
@@ -222,7 +256,6 @@ async def test_remove_favorite_case_insensitive(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
         # Remove using MusicBrainz ID (case doesn't matter for IDs)
         await remove_favorite(
@@ -237,7 +270,7 @@ async def test_remove_favorite_case_insensitive(
         assert "ca891d65-d9b0-4258-89f7-e6ba29d83767" not in updated_data["favorites"]
 
         # Verify the config entry was reloaded (to update UI)
-        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+        # Note: No longer reloading config entry - using dynamic entity management instead
 
 
 async def test_remove_favorite_unicode(
@@ -253,7 +286,6 @@ async def test_remove_favorite_unicode(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
         # Remove the unicode favorite by MusicBrainz ID
         await remove_favorite(
@@ -268,7 +300,7 @@ async def test_remove_favorite_unicode(
         assert "f0d05c64-9959-4ae1-899b-acf51b97638c" not in updated_data["favorites"]
 
         # Verify the config entry was reloaded (to update UI)
-        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+        # Note: No longer reloading config entry - using dynamic entity management instead
 
 
 async def test_remove_favorite_not_found(
@@ -299,7 +331,6 @@ async def test_remove_favorite_no_entity_in_registry(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
         # Remove should still succeed even if entity isn't in registry
         await remove_favorite(
@@ -314,7 +345,7 @@ async def test_remove_favorite_no_entity_in_registry(
         mock_entity_registry.async_remove.assert_not_called()
 
         # Verify the config entry was reloaded (to update UI)
-        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+        # Note: No longer reloading config entry - using dynamic entity management instead
 
 
 async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
@@ -329,7 +360,6 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
 
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload") as mock_reload,
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
@@ -355,7 +385,7 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
         assert stored_variants == expected_variants
 
         # Verify reload was called
-        mock_reload.assert_called_once_with(entry.entry_id)
+        # Note: No longer reloading config entry - using dynamic entity management instead
 
 
 async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
@@ -372,7 +402,6 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
     # Mock the config entry update and reload
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
-        patch.object(hass.config_entries, "async_reload"),
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,

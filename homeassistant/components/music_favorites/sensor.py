@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -16,6 +16,65 @@ from .types import MusicFavoritesConfigEntry
 
 # Serialize entity updates for future API rate limiting
 PARALLEL_UPDATES = 1
+
+
+class EntityManager:
+    """Manages dynamic entity addition and removal for the Music Favorites integration."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: MusicFavoritesConfigEntry,
+        async_add_entities: AddConfigEntryEntitiesCallback,
+    ) -> None:
+        """Initialize the entity manager."""
+        self.hass = hass
+        self.entry = entry
+        self._async_add_entities = async_add_entities
+        self._added_entities: set[str] = set()
+
+        # Cache device info for consistent entity assignment
+        self._bands_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_acts")},
+            name="Top Acts",
+            manufacturer="Music Favorites Integration",
+            model="Bands & Artists Collection",
+            sw_version=VERSION,
+            configuration_url=f"homeassistant://config/integrations/integration/{DOMAIN}",
+        )
+
+    @callback
+    def add_favorite_entity(
+        self, musicbrainz_id: str, favorite_variants: list[str]
+    ) -> None:
+        """Add a new favorite entity."""
+        if musicbrainz_id not in self._added_entities:
+            entity = FavoriteSensor(
+                musicbrainz_id, favorite_variants, self._bands_device_info
+            )
+            self._async_add_entities([entity])
+            self._added_entities.add(musicbrainz_id)
+
+    @callback
+    def sync_entities_with_config(self) -> None:
+        """Synchronize entities with current config entry data.
+
+        This handles both additions and ensures we track existing entities.
+        """
+        favorites_data: dict[str, list[str]] = self.entry.data.get("favorites", {})
+
+        # Add any new entities that aren't already tracked
+        new_entities = []
+        for musicbrainz_id, favorite_variants in favorites_data.items():
+            if musicbrainz_id not in self._added_entities:
+                entity = FavoriteSensor(
+                    musicbrainz_id, favorite_variants, self._bands_device_info
+                )
+                new_entities.append(entity)
+                self._added_entities.add(musicbrainz_id)
+
+        if new_entities:
+            self._async_add_entities(new_entities)
 
 
 class FavoriteSensor(SensorEntity):
@@ -63,39 +122,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up Music Favorites sensors from a config entry."""
 
-    # Get our favorites data from the config entry
-    favorites_data: dict[str, list[str]] = entry.data.get("favorites", {})
+    # Create entity manager and store it in runtime_data for dynamic management
+    entity_manager = EntityManager(hass, entry, async_add_entities)
+    entry.runtime_data["entity_manager"] = entity_manager
 
-    # Gold Tier: Multiple devices for different favorite types
-    # For now, we'll create separate devices based on future categorization
-    # Currently all favorites go to "Bands & Artists" device until we add
-    # type support
-
-    bands_device_info = DeviceInfo(
-        identifiers={(DOMAIN, f"{entry.entry_id}_acts")},
-        name="Top Acts",
-        manufacturer="Music Favorites Integration",
-        model="Bands & Artists Collection",
-        sw_version=VERSION,
-        configuration_url=f"homeassistant://config/integrations/integration/{DOMAIN}",
-    )
-
-    # Future: Add more device types when we implement type categorization
-    # festivals_device_info = DeviceInfo(
-    #     identifiers={(DOMAIN, f"{entry.entry_id}_festivals")},
-    #     name=f"{entry.title} - Festivals",
-    #     manufacturer="Music Favorites Integration",
-    #     model="Festival Collection",
-    # )
-
-    # Create one sensor entity for each favorite
-    # TO DO: When we add type support, assign to appropriate device
-    entities = []
-    for favorite_key, favorite_variants in favorites_data.items():
-        entities.append(
-            FavoriteSensor(favorite_key, favorite_variants, bands_device_info)
-        )
-
-    # Add all entities to Home Assistant
-    # Side note: I HATE how this is NOT async
-    async_add_entities(entities)
+    # Synchronize with current config entry data (adds all existing favorites)
+    entity_manager.sync_entities_with_config()
