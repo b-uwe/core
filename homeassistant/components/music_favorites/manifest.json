@@ -9,5 +9,5 @@
   "iot_class": "cloud_polling",
   "loggers": ["music_favorites"],
   "quality_scale": "platinum",
-  "requirements": []
+  "requirements": ["beautifulsoup4==4.13.3"]
 }

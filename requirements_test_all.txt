@@ -554,6 +554,7 @@ base36==0.1.1
 # homeassistant.components.eddystone_temperature
 # beacontools[scan]==2.1.0
 
+# homeassistant.components.music_favorites
 # homeassistant.components.scrape
 beautifulsoup4==4.13.3
 
