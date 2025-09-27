@@ -33,12 +33,13 @@
   - [x] **Connectivity testing** - Config flow + setup entry validation
   - [x] **Error handling** - Specific exceptions + broad catch with logging
   - [x] **Async implementation** - No blocking calls, proper websession injection
-- [ ] Allow Adding VIA MusicBrainz ID
-- [ ] Feed name into MusicBrainz to get an ID back
-- [ ] Error handling for "not" found
-- [ ] Storing the ID from the first entry found
+- [x] Feed name into MusicBrainz to get an ID back
+- [x] Error handling for "not" found
+- [x] Storing the ID from the first entry found
 - [ ] Handling multiple entries by asking back with the user
-- [ ] Storing all Aliases
+- [x] Storing all Aliases
+- [ ] Add inc=url-rels parameter to API calls and store links with the entity data
+- [ ] Check for whether an act is still active
 - [ ] Attach BandsInTown
 - [ ] Pull Events
   - [ ] Reset entity-event-setup

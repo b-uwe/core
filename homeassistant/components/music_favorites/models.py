@@ -30,9 +30,12 @@ async def add_favorite(
     entry: ConfigEntry,
     name: str,
     musicbrainz_id: str,
+    aliases: list[str] | None = None,
 ) -> None:
     """Add a new favorite to the collection."""
-    _LOGGER.debug("Adding favorite: %s - %s", name, musicbrainz_id)
+    _LOGGER.debug(
+        "Adding favorite: %s - %s (aliases: %s)", name, musicbrainz_id, aliases or []
+    )
 
     # Get current favorites
     current_favorites = dict(entry.data.get("favorites", {}))
@@ -43,8 +46,11 @@ async def add_favorite(
             f"Favorite with MusicBrainz ID {musicbrainz_id} already exists"
         )
 
-    # Add new favorite
-    current_favorites[musicbrainz_id] = [name]
+    # Add new favorite with name and aliases
+    favorite_variants = [name]
+    if aliases:
+        favorite_variants.extend(aliases)
+    current_favorites[musicbrainz_id] = favorite_variants
 
     # Update the config entry
     hass.config_entries.async_update_entry(

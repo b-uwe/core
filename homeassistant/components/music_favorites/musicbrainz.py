@@ -48,7 +48,7 @@ class MusicBrainzClient:
             limit: Maximum number of results to return
 
         Returns:
-            List of artist dictionaries with id, name, and disambiguation
+            List of artist dictionaries with id, name, disambiguation, score, aliases and third party links
 
         Raises:
             MusicBrainzError: When API call fails
@@ -62,6 +62,7 @@ class MusicBrainzClient:
             "query": f'artist:"{query}"',
             "fmt": "json",
             "limit": str(limit),
+            "inc": "aliases url-rels",
         }
         url = f"{MUSICBRAINZ_API_URL}/artist/?{urlencode(params)}"
 
@@ -91,13 +92,18 @@ class MusicBrainzClient:
             "MusicBrainz returned %d artists for query '%s'", len(artists), query
         )
 
-        # Return simplified artist data
+        # Return simplified artist data with aliases
         simplified_artists = [
             {
                 "id": artist["id"],
                 "name": artist["name"],
                 "disambiguation": artist.get("disambiguation", ""),
                 "score": int(artist.get("score", 0)),
+                "aliases": [
+                    alias.get("name", "")
+                    for alias in artist.get("aliases", [])
+                    if alias.get("name")  # Only include non-empty alias names
+                ],
             }
             for artist in artists
         ]

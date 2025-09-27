@@ -73,6 +73,7 @@ async def add_favorite_service(call: ServiceCall) -> None:
         target_entry,
         call.data["name"],
         call.data["musicbrainz_id"],
+        [],  # Services calls don't provide aliases
     )
 
     _LOGGER.debug("Successfully added favorite '%s'", call.data["name"])

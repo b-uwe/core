@@ -12,6 +12,8 @@ from homeassistant.components.music_favorites.musicbrainz import (
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
+from .fixtures.musicbrainz_responses import IRON_MAIDEN_COMPLETE_RESPONSE
+
 
 @pytest.fixture
 async def musicbrainz_client(hass: HomeAssistant) -> MusicBrainzClient:
@@ -195,3 +197,29 @@ async def test_search_artists_empty_response(
         result = await musicbrainz_client.search_artists("TestBand")
 
     assert result == []
+
+
+async def test_search_artists_with_aliases(
+    hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
+) -> None:
+    """Test artist search includes aliases in results."""
+    # Use realistic MusicBrainz response data from fixtures
+    mock_response_data = {"artists": [IRON_MAIDEN_COMPLETE_RESPONSE]}
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = mock_response_data
+
+    with patch.object(musicbrainz_client.session, "get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+
+        result = await musicbrainz_client.search_artists("Iron Maiden")
+
+    assert len(result) == 1
+    artist = result[0]
+    assert artist["id"] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+    assert artist["name"] == "Iron Maiden"
+    assert artist["aliases"] == [
+        "Ironmaiden",
+        "Maiden",
+        "鉄の処女",
+    ]  # Real aliases from fixture

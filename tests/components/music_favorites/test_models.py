@@ -283,6 +283,39 @@ async def test_remove_favorite_no_entity_in_registry(
         mock_reload.assert_called_once_with(mock_config_entry.entry_id)
 
 
+async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
+    """Test adding favorite with aliases stores them correctly."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Music Favorites",
+        data={"favorites": {}},
+        unique_id="music_favorites",
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch.object(hass.config_entries, "async_reload") as mock_reload,
+    ):
+        await add_favorite(
+            hass,
+            entry,
+            "Iron Maiden",
+            "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            ["Maiden", "The Irons"],
+        )
+
+        # Verify config update was called with aliases included
+        mock_update.assert_called_once()
+        updated_data = mock_update.call_args[1]["data"]["favorites"]
+        assert "ca891d65-d9b0-4258-89f7-e6ba29d83767" in updated_data
+        stored_variants = updated_data["ca891d65-d9b0-4258-89f7-e6ba29d83767"]
+        assert stored_variants == ["Iron Maiden", "Maiden", "The Irons"]
+
+        # Verify reload was called
+        mock_reload.assert_called_once_with(entry.entry_id)
+
+
 async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
     """Test adding favorite when config entry has no existing favorites."""
     # Create config entry with no favorites
