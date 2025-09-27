@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, cast
+from typing import Any, NoReturn
 
 from homeassistant.components.conversation import ConversationEntity, ConversationResult
 from homeassistant.core import HomeAssistant
@@ -19,6 +19,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # Serialize entity updates for future API rate limiting
 PARALLEL_UPDATES = 1
+
+
+def _raise_favorite_not_found(artist_name: str) -> NoReturn:
+    """Raise ServiceValidationError for favorite not found."""
+    raise ServiceValidationError(f"Favorite '{artist_name}' not found")
 
 
 async def async_setup_entry(
@@ -79,8 +84,22 @@ class MusicFavoritesConversationEntity(ConversationEntity):
             _LOGGER.debug("Untrack/remove request for: '%s'", artist_name)
 
             try:
+                # Find the MusicBrainz ID for the artist name
+                current_favorites = self._entry.data.get("favorites", {})
+                musicbrainz_id_to_remove = None
+                for musicbrainz_id, names in current_favorites.items():
+                    if any(
+                        stored_name.lower() == artist_name.lower()
+                        for stored_name in names
+                    ):
+                        musicbrainz_id_to_remove = musicbrainz_id
+                        break
+
+                if musicbrainz_id_to_remove is None:
+                    _raise_favorite_not_found(artist_name)
+
                 # Remove the favorite
-                await remove_favorite(self.hass, self._entry, artist_name)
+                await remove_favorite(self.hass, self._entry, musicbrainz_id_to_remove)
 
                 # Create success response
                 response = intent.IntentResponse(language="en")
@@ -142,13 +161,10 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                     # Exact match found - add the favorite
                     artist_name_resolved = str(resolution["name"])
                     musicbrainz_id = str(resolution["musicbrainz_id"])
-                    resolution_aliases = cast(list[str], resolution.get("aliases", []))
                     await add_favorite(
                         self.hass,
                         self._entry,
-                        artist_name_resolved,
                         musicbrainz_id,
-                        resolution_aliases,
                     )
                     response.async_set_speech(
                         f"Now tracking {artist_name_resolved.upper()}"
@@ -169,13 +185,10 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                         best_match = options[0]
                         best_match_name = str(best_match["name"])
                         best_match_id = str(best_match["musicbrainz_id"])
-                        match_aliases = cast(list[str], best_match.get("aliases", []))
                         await add_favorite(
                             self.hass,
                             self._entry,
-                            best_match_name,
                             best_match_id,
-                            match_aliases,
                         )
                         response.async_set_speech(
                             f"Found multiple matches for {artist_name}. Adding the best match: {best_match_name.upper()}"

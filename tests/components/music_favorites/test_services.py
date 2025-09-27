@@ -56,7 +56,6 @@ async def test_add_favorite_service_success(
             DOMAIN,
             "add_favorite",
             {
-                "name": "The Kinks",
                 "musicbrainz_id": "17b53d9f-5db6-4f6a-808a-0769e99b5111",
             },
             blocking=True,
@@ -67,10 +66,9 @@ async def test_add_favorite_service_success(
         call_args = mock_add.call_args
         assert call_args[0][0] is hass  # First arg is hass
         assert call_args[0][1] == setup_integration  # Second arg is config entry
-        assert call_args[0][2] == "The Kinks"  # Third arg is name
         assert (
-            call_args[0][3] == "17b53d9f-5db6-4f6a-808a-0769e99b5111"
-        )  # Fourth arg is musicbrainz_id
+            call_args[0][2] == "17b53d9f-5db6-4f6a-808a-0769e99b5111"
+        )  # Third arg is musicbrainz_id
 
 
 async def test_remove_favorite_service_success(
@@ -86,7 +84,7 @@ async def test_remove_favorite_service_success(
         await hass.services.async_call(
             DOMAIN,
             "remove_favorite",
-            {"name": "Test Band"},
+            {"musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767"},
             blocking=True,
         )
 
@@ -95,7 +93,9 @@ async def test_remove_favorite_service_success(
         call_args = mock_remove.call_args
         assert call_args[0][0] is hass  # First arg is hass
         assert call_args[0][1] == setup_integration  # Second arg is config entry
-        assert call_args[0][2] == "Test Band"  # Third arg is name
+        assert (
+            call_args[0][2] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )  # Third arg is musicbrainz_id
 
 
 async def test_add_favorite_service_with_config_entry_id(
@@ -112,7 +112,6 @@ async def test_add_favorite_service_with_config_entry_id(
             DOMAIN,
             "add_favorite",
             {
-                "name": "Iron Maiden",
                 "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
             },
             blocking=True,
@@ -123,10 +122,9 @@ async def test_add_favorite_service_with_config_entry_id(
         call_args = mock_add.call_args
         assert call_args[0][0] is hass  # First arg is hass
         assert call_args[0][1] == setup_integration  # Second arg is config entry
-        assert call_args[0][2] == "Iron Maiden"  # Third arg is name
         assert (
-            call_args[0][3] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
-        )  # Fourth arg is musicbrainz_id
+            call_args[0][2] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )  # Third arg is musicbrainz_id
 
 
 async def test_service_no_integration_found(hass: HomeAssistant) -> None:
@@ -137,7 +135,7 @@ async def test_service_no_integration_found(hass: HomeAssistant) -> None:
         await hass.services.async_call(
             DOMAIN,
             "add_favorite",
-            {"name": "Queen", "musicbrainz_id": "0383dadf-2a4e-4d10-a46a-e9e041da8eb3"},
+            {"musicbrainz_id": "0383dadf-2a4e-4d10-a46a-e9e041da8eb3"},
             blocking=True,
         )
 
@@ -154,7 +152,7 @@ async def test_service_remove_favorite_simple(
         await hass.services.async_call(
             DOMAIN,
             "remove_favorite",
-            {"name": "Test Band"},
+            {"musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767"},
             blocking=True,
         )
 
@@ -165,7 +163,9 @@ async def test_service_remove_favorite_simple(
         assert (
             call_args[0][1] == setup_integration
         )  # Second arg is config entry (auto-discovered)
-        assert call_args[0][2] == "Test Band"  # Third arg is name
+        assert (
+            call_args[0][2] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )  # Third arg is musicbrainz_id
 
 
 async def test_service_config_entry_not_loaded(
@@ -180,7 +180,6 @@ async def test_service_config_entry_not_loaded(
             DOMAIN,
             "add_favorite",
             {
-                "name": "AC/DC",
                 "musicbrainz_id": "66c662b6-6e2f-4930-8610-912e24c63ed1",
             },
             blocking=True,
@@ -202,7 +201,6 @@ async def test_add_favorite_model_exception(
                 DOMAIN,
                 "add_favorite",
                 {
-                    "name": "Black Sabbath",
                     "musicbrainz_id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
                 },
                 blocking=True,
@@ -223,7 +221,7 @@ async def test_remove_favorite_model_exception(
             await hass.services.async_call(
                 DOMAIN,
                 "remove_favorite",
-                {"name": "Non-existent Band"},
+                {"musicbrainz_id": "00000000-0000-0000-0000-000000000000"},
                 blocking=True,
             )
 
@@ -233,7 +231,6 @@ async def test_service_schema_validation_add_favorite() -> None:
 
     # Valid data should pass
     valid_data = {
-        "name": "Led Zeppelin",
         "musicbrainz_id": "678d88b2-87b0-403b-b63d-5da7465aecc3",
     }
     result = ADD_FAVORITE_SCHEMA(valid_data)
@@ -241,26 +238,20 @@ async def test_service_schema_validation_add_favorite() -> None:
 
     # Missing required field should fail
     with pytest.raises(vol.MultipleInvalid):
-        ADD_FAVORITE_SCHEMA({"name": "Test Band"})  # Missing musicbrainz_id
-
-    # Missing name should fail
-    with pytest.raises(vol.MultipleInvalid):
-        ADD_FAVORITE_SCHEMA(
-            {"musicbrainz_id": "678d88b2-87b0-403b-b63d-5da7465aecc3"}
-        )  # Missing name
+        ADD_FAVORITE_SCHEMA({})  # Missing musicbrainz_id
 
 
 async def test_service_schema_validation_remove_favorite() -> None:
     """Test that remove_favorite service schema validation works."""
 
     # Valid data should pass
-    valid_data = {"name": "Test Band"}
+    valid_data = {"musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767"}
     result = REMOVE_FAVORITE_SCHEMA(valid_data)
     assert result == valid_data
 
     # Missing required field should fail
     with pytest.raises(vol.MultipleInvalid):
-        REMOVE_FAVORITE_SCHEMA({})  # Missing name
+        REMOVE_FAVORITE_SCHEMA({})  # Missing musicbrainz_id
 
 
 async def test_service_no_config_entries_after_setup(
@@ -278,7 +269,6 @@ async def test_service_no_config_entries_after_setup(
             DOMAIN,
             "add_favorite",
             {
-                "name": "Pink Floyd",
                 "musicbrainz_id": "83d91898-7763-47d7-b03b-b92132375c47",
             },
             blocking=True,
@@ -298,7 +288,6 @@ async def test_service_config_entry_not_loaded_after_setup(
             DOMAIN,
             "add_favorite",
             {
-                "name": "The Beatles",
                 "musicbrainz_id": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
             },
             blocking=True,

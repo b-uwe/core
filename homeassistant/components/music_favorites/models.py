@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
@@ -28,14 +28,10 @@ favorites: dict[str, list[str]] = {
 async def add_favorite(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    name: str,
     musicbrainz_id: str,
-    aliases: list[str] | None = None,
 ) -> None:
     """Add a new favorite to the collection."""
-    _LOGGER.debug(
-        "Adding favorite: %s - %s (aliases: %s)", name, musicbrainz_id, aliases or []
-    )
+    _LOGGER.debug("Adding favorite with MusicBrainz ID: %s", musicbrainz_id)
 
     # Get current favorites
     current_favorites = dict(entry.data.get("favorites", {}))
@@ -46,7 +42,25 @@ async def add_favorite(
             f"Favorite with MusicBrainz ID {musicbrainz_id} already exists"
         )
 
-    # Add new favorite with name and aliases
+    # Fetch complete artist data from MusicBrainz
+    client = MusicBrainzClient(hass)
+    try:
+        artist_data = await client.get_artist_by_id(musicbrainz_id)
+    except MusicBrainzError as err:
+        _LOGGER.error("Failed to fetch artist data for %s: %s", musicbrainz_id, err)
+        raise ServiceValidationError(
+            f"Could not fetch artist data from MusicBrainz: {err}"
+        ) from err
+
+    # Extract name and aliases from MusicBrainz response
+    name = artist_data["name"]
+    aliases = [
+        alias.get("name", "")
+        for alias in artist_data.get("aliases", [])
+        if alias.get("name")  # Only include non-empty alias names
+    ]
+
+    # Add new favorite with name and aliases from MusicBrainz
     favorite_variants = [name]
     if aliases:
         favorite_variants.extend(aliases)
@@ -67,26 +81,29 @@ async def add_favorite(
 async def remove_favorite(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    name: str,
+    musicbrainz_id: str,
 ) -> None:
     """Remove a favorite from the collection."""
-    _LOGGER.debug("Removing favorite: %s", name)
+    _LOGGER.debug("Removing favorite with MusicBrainz ID: %s", musicbrainz_id)
 
     # Get current favorites
     current_favorites = dict(entry.data.get("favorites", {}))
 
-    # Find the favorite by name (case insensitive)
-    musicbrainz_id_to_remove = None
-    for musicbrainz_id, names in current_favorites.items():
-        if any(stored_name.lower() == name.lower() for stored_name in names):
-            musicbrainz_id_to_remove = musicbrainz_id
-            break
+    # Check if the favorite exists
+    if musicbrainz_id not in current_favorites:
+        raise ServiceValidationError(
+            f"Favorite with MusicBrainz ID '{musicbrainz_id}' not found"
+        )
 
-    if musicbrainz_id_to_remove is None:
-        raise ServiceValidationError(f"Favorite '{name}' not found")
+    # Get the name for logging
+    favorite_name = (
+        current_favorites[musicbrainz_id][0]
+        if current_favorites[musicbrainz_id]
+        else "Unknown"
+    )
 
     # Remove the favorite
-    del current_favorites[musicbrainz_id_to_remove]
+    del current_favorites[musicbrainz_id]
 
     # Update the config entry
     hass.config_entries.async_update_entry(
@@ -97,7 +114,7 @@ async def remove_favorite(
     entity_registry = er.async_get(hass)
 
     # Find and remove the entity for this favorite
-    unique_id = f"favorite_{musicbrainz_id_to_remove}"
+    unique_id = f"favorite_{musicbrainz_id}"
     if entity_id := entity_registry.async_get_entity_id(
         "sensor", "music_favorites", unique_id
     ):
@@ -107,13 +124,13 @@ async def remove_favorite(
     # This ensures the entity disappears from the device page
     await hass.config_entries.async_reload(entry.entry_id)
 
-    _LOGGER.info("Successfully removed favorite: %s", name)
+    _LOGGER.info("Successfully removed favorite: %s", favorite_name)
 
 
 async def resolve_artist_from_name(
     hass: HomeAssistant,
     artist_name: str,
-) -> dict[str, str | list[dict[str, str]]] | None:
+) -> dict[str, Any] | None:
     """Resolve artist name to MusicBrainz ID using the decision logic.
 
     Args:

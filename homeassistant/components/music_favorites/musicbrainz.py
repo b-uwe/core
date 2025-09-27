@@ -120,3 +120,48 @@ class MusicBrainzClient:
 
         _LOGGER.info("No artists found for query '%s'", query)
         return []
+
+    async def get_artist_by_id(self, artist_id: str) -> dict[str, Any]:
+        """Get complete artist data by MusicBrainz ID.
+
+        Args:
+            artist_id: MusicBrainz artist ID
+
+        Returns:
+            Complete artist data with name, aliases, and all relations
+
+        Raises:
+            MusicBrainzError: When API call fails
+        """
+        _LOGGER.debug("Fetching MusicBrainz artist by ID: '%s'", artist_id)
+
+        # Build MusicBrainz API URL for direct artist lookup
+        url = f"{MUSICBRAINZ_API_URL}/artist/{artist_id}?inc=aliases+url-rels&fmt=json"
+
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+        }
+
+        try:
+            async with self.session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    raise MusicBrainzError(
+                        f"MusicBrainz API returned status {response.status} for artist {artist_id}"
+                    )
+
+                data: dict[str, Any] = await response.json()
+
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Failed to fetch MusicBrainz artist '%s': %s", artist_id, err)
+            raise MusicBrainzError(f"MusicBrainz artist lookup failed: {err}") from err
+
+        _LOGGER.debug(
+            "Fetched artist '%s' (%s) with %d aliases and %d relations",
+            data.get("name", "Unknown"),
+            artist_id,
+            len(data.get("aliases", [])),
+            len(data.get("relations", [])),
+        )
+
+        return data

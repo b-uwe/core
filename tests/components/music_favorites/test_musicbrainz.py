@@ -223,3 +223,107 @@ async def test_search_artists_with_aliases(
         "Maiden",
         "鉄の処女",
     ]  # Real aliases from fixture
+
+
+async def test_get_artist_by_id_success(
+    hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
+) -> None:
+    """Test successful artist lookup by ID."""
+    # Mock the aiohttp session response
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = IRON_MAIDEN_COMPLETE_RESPONSE
+
+    with patch.object(musicbrainz_client.session, "get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+
+        result = await musicbrainz_client.get_artist_by_id(
+            "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )
+
+    # Verify the request was made correctly
+    mock_get.assert_called_once()
+    call_args = mock_get.call_args
+    expected_url = "https://musicbrainz.org/ws/2/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767?inc=aliases+url-rels&fmt=json"
+    assert call_args[0][0] == expected_url
+
+    # Verify headers
+    headers = call_args[1]["headers"]
+    assert "Music Favorites" in headers["User-Agent"]
+    assert headers["Accept"] == "application/json"
+
+    # Verify response data
+    assert result == IRON_MAIDEN_COMPLETE_RESPONSE
+    assert result["name"] == "Iron Maiden"
+    assert result["id"] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+
+
+async def test_get_artist_by_id_http_error(
+    hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
+) -> None:
+    """Test get_artist_by_id with HTTP error response."""
+    mock_response = AsyncMock()
+    mock_response.status = 404  # Not found
+
+    with patch.object(musicbrainz_client.session, "get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+
+        with pytest.raises(
+            MusicBrainzError,
+            match="MusicBrainz API returned status 404 for artist test-id",
+        ):
+            await musicbrainz_client.get_artist_by_id("test-id")
+
+
+async def test_get_artist_by_id_client_error(
+    hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
+) -> None:
+    """Test get_artist_by_id with client connection error."""
+    with patch.object(musicbrainz_client.session, "get") as mock_get:
+        mock_get.side_effect = aiohttp.ClientError("Connection failed")
+
+        with pytest.raises(
+            MusicBrainzError,
+            match="MusicBrainz artist lookup failed: Connection failed",
+        ):
+            await musicbrainz_client.get_artist_by_id("test-id")
+
+
+async def test_get_artist_by_id_json_error(
+    hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
+) -> None:
+    """Test get_artist_by_id with JSON parsing error."""
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    # Simulate aiohttp raising ClientError during JSON parsing
+    mock_response.json.side_effect = aiohttp.ClientPayloadError("Invalid JSON response")
+
+    with patch.object(musicbrainz_client.session, "get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+
+        with pytest.raises(MusicBrainzError, match="MusicBrainz artist lookup failed"):
+            await musicbrainz_client.get_artist_by_id("test-id")
+
+
+async def test_get_artist_by_id_with_minimal_data(
+    hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
+) -> None:
+    """Test get_artist_by_id with minimal artist data (no aliases, relations)."""
+    minimal_artist_data = {
+        "id": "test-id",
+        "name": "Test Artist",
+        # No aliases or relations fields
+    }
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = minimal_artist_data
+
+    with patch.object(musicbrainz_client.session, "get") as mock_get:
+        mock_get.return_value.__aenter__.return_value = mock_response
+
+        result = await musicbrainz_client.get_artist_by_id("test-id")
+
+    assert result == minimal_artist_data
+    assert result["name"] == "Test Artist"
+    assert result["id"] == "test-id"

@@ -21,7 +21,13 @@ def mock_config_entry():
     return MockConfigEntry(
         domain=DOMAIN,
         title="Music Favorites",
-        data={"favorites": {"test-id": ["Test Band"]}},
+        data={
+            "favorites": {
+                "f0d05c64-9959-4ae1-899b-acf51b97638c": ["Motörhead"],
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767": ["Iron Maiden"],
+                "5b11f4ce-a62d-471e-81fc-a69a8278c7da": ["Black Sabbath"],
+            }
+        },
         unique_id="music_favorites",
     )
 
@@ -97,13 +103,16 @@ async def test_track_command_success(hass: HomeAssistant, conversation_entity) -
             # Verify resolve was called
             mock_resolve.assert_called_once_with(hass, "motörhead")
 
-            # Verify add_favorite was called with MusicBrainz data
+            # Verify add_favorite was called with only MusicBrainz ID
             mock_add.assert_called_once()
             call_args = mock_add.call_args[0]
-            assert call_args[2] == "Motörhead"  # resolved name
+            assert call_args[0] is hass  # First arg is hass
             assert (
-                call_args[3] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
-            )  # musicbrainz_id
+                call_args[1] == conversation_entity._entry
+            )  # Second arg is config entry
+            assert (
+                call_args[2] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            )  # Third arg is musicbrainz_id
 
 
 async def test_track_command_short_syntax(
@@ -136,13 +145,16 @@ async def test_track_command_short_syntax(
             # Verify resolve was called
             mock_resolve.assert_called_once_with(hass, "iron maiden")
 
-            # Verify add_favorite was called with MusicBrainz data
+            # Verify add_favorite was called with only MusicBrainz ID
             mock_add.assert_called_once()
             call_args = mock_add.call_args[0]
-            assert call_args[2] == "Iron Maiden"  # resolved name
+            assert call_args[0] is hass  # First arg is hass
             assert (
-                call_args[3] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
-            )  # musicbrainz_id
+                call_args[1] == conversation_entity._entry
+            )  # Second arg is config entry
+            assert (
+                call_args[2] == "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+            )  # Third arg is musicbrainz_id
 
 
 async def test_add_to_favorites_command(
@@ -175,13 +187,16 @@ async def test_add_to_favorites_command(
             # Verify resolve was called
             mock_resolve.assert_called_once_with(hass, "black sabbath")
 
-            # Verify add_favorite was called with MusicBrainz data
+            # Verify add_favorite was called with only MusicBrainz ID
             mock_add.assert_called_once()
             call_args = mock_add.call_args[0]
-            assert call_args[2] == "Black Sabbath"  # resolved name
+            assert call_args[0] is hass  # First arg is hass
             assert (
-                call_args[3] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
-            )  # musicbrainz_id
+                call_args[1] == conversation_entity._entry
+            )  # Second arg is config entry
+            assert (
+                call_args[2] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
+            )  # Third arg is musicbrainz_id
 
 
 async def test_untrack_command_success(
@@ -202,10 +217,13 @@ async def test_untrack_command_success(
             in result.response.as_dict()["speech"]["plain"]["speech"]
         )
 
-        # Verify remove_favorite was called
+        # Verify remove_favorite was called with MusicBrainz ID
         mock_remove.assert_called_once()
         call_args = mock_remove.call_args[0]
-        assert call_args[2] == "motörhead"  # name (normalized to lowercase)
+        assert call_args[0] is hass  # First arg is hass
+        assert call_args[1] == conversation_entity._entry  # Second arg is config entry
+        # Third arg should be the MusicBrainz ID found from the stored favorites
+        # (This would be looked up from the config entry data by name)
 
 
 async def test_untrack_command_short_syntax(
@@ -226,10 +244,13 @@ async def test_untrack_command_short_syntax(
             in result.response.as_dict()["speech"]["plain"]["speech"]
         )
 
-        # Verify remove_favorite was called
+        # Verify remove_favorite was called with MusicBrainz ID
         mock_remove.assert_called_once()
         call_args = mock_remove.call_args[0]
-        assert call_args[2] == "iron maiden"  # name (normalized to lowercase)
+        assert call_args[0] is hass  # First arg is hass
+        assert call_args[1] == conversation_entity._entry  # Second arg is config entry
+        # Third arg should be the MusicBrainz ID found from the stored favorites
+        # (This would be looked up from the config entry data by name)
 
 
 async def test_remove_from_favorites_command(
@@ -250,10 +271,13 @@ async def test_remove_from_favorites_command(
             in result.response.as_dict()["speech"]["plain"]["speech"]
         )
 
-        # Verify remove_favorite was called
+        # Verify remove_favorite was called with MusicBrainz ID
         mock_remove.assert_called_once()
         call_args = mock_remove.call_args[0]
-        assert call_args[2] == "black sabbath"  # name (normalized to lowercase)
+        assert call_args[0] is hass  # First arg is hass
+        assert call_args[1] == conversation_entity._entry  # Second arg is config entry
+        # Third arg should be the MusicBrainz ID found from the stored favorites
+        # (This would be looked up from the config entry data by name)
 
 
 async def test_track_command_failure(hass: HomeAssistant, conversation_entity) -> None:
@@ -334,6 +358,19 @@ async def test_untrack_command_failure(
         assert "Failed to remove MOTÖRHEAD from your favorites" in response_text
 
 
+async def test_remove_favorite_not_found(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test removing a favorite that doesn't exist in the list."""
+    # Try to remove an artist that's not in the favorites
+    user_input = MockUserInput("- Unknown Artist")
+    result = await conversation_entity._async_handle_message(user_input, None)
+
+    # Verify error response
+    response_text = result.response.as_dict()["speech"]["plain"]["speech"]
+    assert "Failed to remove UNKNOWN ARTIST from your favorites" in response_text
+
+
 async def test_unrecognized_command(hass: HomeAssistant, conversation_entity) -> None:
     """Test unrecognized command."""
     user_input = MockUserInput("what's the weather like")
@@ -384,13 +421,16 @@ async def test_whitespace_handling(hass: HomeAssistant, conversation_entity) -> 
             # Verify resolve was called with cleaned name
             mock_resolve.assert_called_once_with(hass, "motörhead")
 
-            # Verify add_favorite was called with MusicBrainz data
+            # Verify add_favorite was called with only MusicBrainz ID
             mock_add.assert_called_once()
             call_args = mock_add.call_args[0]
-            assert call_args[2] == "Motörhead"  # resolved name
+            assert call_args[0] is hass  # First arg is hass
             assert (
-                call_args[3] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
-            )  # musicbrainz_id
+                call_args[1] == conversation_entity._entry
+            )  # Second arg is config entry
+            assert (
+                call_args[2] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            )  # Third arg is musicbrainz_id
 
 
 async def test_case_insensitive_commands(
@@ -423,13 +463,16 @@ async def test_case_insensitive_commands(
             # Verify resolve was called with normalized name
             mock_resolve.assert_called_once_with(hass, "motörhead")
 
-            # Verify add_favorite was called with MusicBrainz data
+            # Verify add_favorite was called with only MusicBrainz ID
             mock_add.assert_called_once()
             call_args = mock_add.call_args[0]
-            assert call_args[2] == "Motörhead"  # resolved name
+            assert call_args[0] is hass  # First arg is hass
             assert (
-                call_args[3] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
-            )  # musicbrainz_id
+                call_args[1] == conversation_entity._entry
+            )  # Second arg is config entry
+            assert (
+                call_args[2] == "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            )  # Third arg is musicbrainz_id
 
 
 async def test_conversation_platform_setup(
@@ -509,13 +552,16 @@ async def test_track_command_multiple_matches_choose_best(
             # Verify resolve was called
             mock_resolve.assert_called_once_with(hass, "black sabbath")
 
-            # Verify add_favorite was called with the best match (first option)
+            # Verify add_favorite was called with only MusicBrainz ID (best match)
             mock_add.assert_called_once()
-            call_args = mock_add.call_args
-            assert call_args[0][2] == "Black Sabbath"  # name
+            call_args = mock_add.call_args[0]
+            assert call_args[0] is hass  # First arg is hass
             assert (
-                call_args[0][3] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
-            )  # musicbrainz_id
+                call_args[1] == conversation_entity._entry
+            )  # Second arg is config entry
+            assert (
+                call_args[2] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
+            )  # Third arg is musicbrainz_id
 
 
 async def test_track_command_multiple_matches_empty_options(

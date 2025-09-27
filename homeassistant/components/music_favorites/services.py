@@ -19,14 +19,13 @@ _LOGGER = logging.getLogger(__name__)
 # Service schemas
 ADD_FAVORITE_SCHEMA = vol.Schema(
     {
-        vol.Required("name"): str,
         vol.Required("musicbrainz_id"): str,
     }
 )
 
 REMOVE_FAVORITE_SCHEMA = vol.Schema(
     {
-        vol.Required("name"): str,
+        vol.Required("musicbrainz_id"): str,
     }
 )
 
@@ -63,20 +62,20 @@ async def add_favorite_service(call: ServiceCall) -> None:
     target_entry = _get_target_entry(hass, call)
 
     _LOGGER.debug(
-        "Adding favorite '%s' to entry %s",
-        call.data["name"],
+        "Adding favorite with MusicBrainz ID '%s' to entry %s",
+        call.data["musicbrainz_id"],
         target_entry.entry_id,
     )
 
     await add_favorite(
         hass,
         target_entry,
-        call.data["name"],
         call.data["musicbrainz_id"],
-        [],  # Services calls don't provide aliases
     )
 
-    _LOGGER.debug("Successfully added favorite '%s'", call.data["name"])
+    _LOGGER.debug(
+        "Successfully added favorite with ID '%s'", call.data["musicbrainz_id"]
+    )
 
 
 async def remove_favorite_service(call: ServiceCall) -> None:
@@ -87,12 +86,16 @@ async def remove_favorite_service(call: ServiceCall) -> None:
     target_entry = _get_target_entry(hass, call)
 
     _LOGGER.debug(
-        "Removing favorite '%s' from entry %s", call.data["name"], target_entry.entry_id
+        "Removing favorite with MusicBrainz ID '%s' from entry %s",
+        call.data["musicbrainz_id"],
+        target_entry.entry_id,
     )
 
-    await remove_favorite(hass, target_entry, call.data["name"])
+    await remove_favorite(hass, target_entry, call.data["musicbrainz_id"])
 
-    _LOGGER.debug("Successfully removed favorite '%s'", call.data["name"])
+    _LOGGER.debug(
+        "Successfully removed favorite with ID '%s'", call.data["musicbrainz_id"]
+    )
 
 
 def register_services(hass: HomeAssistant) -> None:

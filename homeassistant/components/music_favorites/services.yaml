@@ -1,10 +1,5 @@
 add_favorite:
   fields:
-    name:
-      required: true
-      example: "Dyscarnate"
-      selector:
-        text:
     musicbrainz_id:
       required: true
       example: "f0d05c64-9959-4ae1-899b-acf51b97638c"
@@ -13,8 +8,8 @@ add_favorite:
 
 remove_favorite:
   fields:
-    name:
+    musicbrainz_id:
       required: true
-      example: "Dyscarnate"
+      example: "f0d05c64-9959-4ae1-899b-acf51b97638c"
       selector:
         text:

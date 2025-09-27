@@ -42,12 +42,8 @@
   "services": {
     "add_favorite": {
       "name": "Add favorite",
-      "description": "Add a new favorite band or artist to your collection.",
+      "description": "Add a new favorite band or artist to your collection by MusicBrainz ID. The artist name and aliases will be fetched automatically from MusicBrainz.",
       "fields": {
-        "name": {
-          "name": "Name",
-          "description": "The name of the band or artist."
-        },
         "musicbrainz_id": {
           "name": "MusicBrainz ID",
           "description": "The unique MusicBrainz identifier for this band or artist."
@@ -56,11 +52,11 @@
     },
     "remove_favorite": {
       "name": "Remove favorite",
-      "description": "Remove an artist or band from your music favorites.",
+      "description": "Remove an artist or band from your music favorites by MusicBrainz ID.",
       "fields": {
-        "name": {
-          "name": "Name",
-          "description": "Name of the artist or band to remove."
+        "musicbrainz_id": {
+          "name": "MusicBrainz ID",
+          "description": "The unique MusicBrainz identifier for the band or artist to remove."
         }
       }
     }

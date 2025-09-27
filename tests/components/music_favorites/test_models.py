@@ -14,6 +14,11 @@ from homeassistant.components.music_favorites.musicbrainz import MusicBrainzErro
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
+from .fixtures.musicbrainz_responses import (
+    HALF_ME_COMPLETE_RESPONSE,
+    IRON_MAIDEN_COMPLETE_RESPONSE,
+)
+
 from tests.common import MockConfigEntry
 
 
@@ -55,13 +60,18 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload") as mock_reload,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
     ):
-        # Add a new favorite
+        mock_client = mock_client_class.return_value
+        mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
+
+        # Add a new favorite (Half Me is not in the mock_config_entry)
         await add_favorite(
             hass,
             mock_config_entry,
-            "Led Zeppelin",
-            "678d88b2-87b0-403b-b63d-5da7465aecc3",
+            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",  # Half Me ID
         )
 
         # Verify the config entry was updated with new favorite
@@ -71,10 +81,13 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
         updated_data = call_args[1]["data"]  # The data keyword argument
 
         assert updated_entry == mock_config_entry
-        assert "678d88b2-87b0-403b-b63d-5da7465aecc3" in updated_data["favorites"]
-        assert updated_data["favorites"]["678d88b2-87b0-403b-b63d-5da7465aecc3"] == [
-            "Led Zeppelin"
-        ]
+        assert "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec" in updated_data["favorites"]
+        # Half Me has no aliases - should only contain the name itself
+        expected_variants = ["Half Me"]
+        assert (
+            updated_data["favorites"]["963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"]
+            == expected_variants
+        )
 
         # Verify the config entry was reloaded (to create new entities)
         mock_reload.assert_called_once_with(mock_config_entry.entry_id)
@@ -91,25 +104,23 @@ async def test_add_favorite_already_exists(
         await add_favorite(
             hass,
             mock_config_entry,
-            "Iron Maiden",
-            "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            "ca891d65-d9b0-4258-89f7-e6ba29d83767",  # Iron Maiden ID already in mock_config_entry
         )
 
 
 async def test_add_favorite_case_insensitive_duplicate(
     hass: HomeAssistant, mock_config_entry
 ) -> None:
-    """Test that duplicate detection works regardless of case/spacing."""
+    """Test that duplicate detection works by MusicBrainz ID."""
     mock_config_entry.add_to_hass(hass)
 
-    # Try to add "IRON MAIDEN" when "Iron Maiden" already exists
+    # Try to add the same MusicBrainz ID again (Iron Maiden already exists)
     # This should fail because the MusicBrainz ID already exists
     with pytest.raises(ServiceValidationError, match="already exists"):
         await add_favorite(
             hass,
             mock_config_entry,
-            "IRON MAIDEN",
-            "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            "ca891d65-d9b0-4258-89f7-e6ba29d83767",  # Same Iron Maiden ID
         )
 
 
@@ -123,10 +134,21 @@ async def test_add_favorite_unicode_handling(
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload"),
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
     ):
-        # Add a favorite with unicode characters
+        mock_client = mock_client_class.return_value
+        # Use Iron Maiden fixture which includes unicode aliases
+        mock_client.get_artist_by_id = AsyncMock(
+            return_value=IRON_MAIDEN_COMPLETE_RESPONSE
+        )
+
+        # Add a favorite with unicode data (using different ID not in mock_config_entry)
         await add_favorite(
-            hass, mock_config_entry, "Sigur Rós", "703d7b12-18a8-4acb-8d8e-7badf2f3bd5c"
+            hass,
+            mock_config_entry,
+            "different-unicode-id-123",  # Different ID for unicode test
         )
 
         # Verify it was added correctly
@@ -135,10 +157,12 @@ async def test_add_favorite_unicode_handling(
         updated_data = call_args[1]["data"]
 
         # The ID should be the MusicBrainz ID
-        assert "703d7b12-18a8-4acb-8d8e-7badf2f3bd5c" in updated_data["favorites"]
-        assert updated_data["favorites"]["703d7b12-18a8-4acb-8d8e-7badf2f3bd5c"] == [
-            "Sigur Rós"
-        ]
+        assert "different-unicode-id-123" in updated_data["favorites"]
+        # Iron Maiden should be stored with name + aliases (including unicode)
+        expected_variants = ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"]
+        assert (
+            updated_data["favorites"]["different-unicode-id-123"] == expected_variants
+        )
 
 
 async def test_remove_favorite_success(
@@ -156,8 +180,10 @@ async def test_remove_favorite_success(
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
-        # Remove an existing favorite
-        await remove_favorite(hass, mock_config_entry, "Iron Maiden")
+        # Remove an existing favorite by MusicBrainz ID
+        await remove_favorite(
+            hass, mock_config_entry, "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )
 
         # Verify the config entry was updated (favorite removed)
         mock_update.assert_called_once()
@@ -198,8 +224,10 @@ async def test_remove_favorite_case_insensitive(
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
-        # Remove using different case
-        await remove_favorite(hass, mock_config_entry, "IRON MAIDEN")
+        # Remove using MusicBrainz ID (case doesn't matter for IDs)
+        await remove_favorite(
+            hass, mock_config_entry, "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )
 
         # Verify it was still found and removed
         mock_update.assert_called_once()
@@ -227,8 +255,10 @@ async def test_remove_favorite_unicode(
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
-        # Remove the unicode favorite
-        await remove_favorite(hass, mock_config_entry, "Motörhead")
+        # Remove the unicode favorite by MusicBrainz ID
+        await remove_favorite(
+            hass, mock_config_entry, "f0d05c64-9959-4ae1-899b-acf51b97638c"
+        )
 
         # Verify it was removed
         mock_update.assert_called_once()
@@ -247,9 +277,11 @@ async def test_remove_favorite_not_found(
     """Test removing a non-existent favorite raises an error."""
     mock_config_entry.add_to_hass(hass)
 
-    # Try to remove a favorite that doesn't exist
+    # Try to remove a favorite that doesn't exist by MusicBrainz ID
     with pytest.raises(ServiceValidationError, match="not found"):
-        await remove_favorite(hass, mock_config_entry, "Non-existent Band")
+        await remove_favorite(
+            hass, mock_config_entry, "00000000-0000-0000-0000-000000000000"
+        )
 
 
 async def test_remove_favorite_no_entity_in_registry(
@@ -270,7 +302,9 @@ async def test_remove_favorite_no_entity_in_registry(
         patch.object(hass.config_entries, "async_reload") as mock_reload,
     ):
         # Remove should still succeed even if entity isn't in registry
-        await remove_favorite(hass, mock_config_entry, "Iron Maiden")
+        await remove_favorite(
+            hass, mock_config_entry, "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )
 
         # Verify the favorite was still removed from config
         mock_update.assert_called_once()
@@ -296,13 +330,19 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload") as mock_reload,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
     ):
+        mock_client = mock_client_class.return_value
+        mock_client.get_artist_by_id = AsyncMock(
+            return_value=IRON_MAIDEN_COMPLETE_RESPONSE
+        )
+
         await add_favorite(
             hass,
             entry,
-            "Iron Maiden",
-            "ca891d65-d9b0-4258-89f7-e6ba29d83767",
-            ["Maiden", "The Irons"],
+            "ca891d65-d9b0-4258-89f7-e6ba29d83767",  # Iron Maiden ID
         )
 
         # Verify config update was called with aliases included
@@ -310,7 +350,9 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
         updated_data = mock_update.call_args[1]["data"]["favorites"]
         assert "ca891d65-d9b0-4258-89f7-e6ba29d83767" in updated_data
         stored_variants = updated_data["ca891d65-d9b0-4258-89f7-e6ba29d83767"]
-        assert stored_variants == ["Iron Maiden", "Maiden", "The Irons"]
+        # Iron Maiden has name + real aliases from MusicBrainz
+        expected_variants = ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"]
+        assert stored_variants == expected_variants
 
         # Verify reload was called
         mock_reload.assert_called_once_with(entry.entry_id)
@@ -331,10 +373,18 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch.object(hass.config_entries, "async_reload"),
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
     ):
+        mock_client = mock_client_class.return_value
+        mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
+
         # Add first favorite
         await add_favorite(
-            hass, empty_entry, "The Kinks", "17b53d9f-5db6-4f6a-808a-0769e99b5111"
+            hass,
+            empty_entry,
+            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",  # Half Me ID
         )
 
         # Verify it was added correctly
@@ -342,10 +392,15 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
         updated_data = call_args[1]["data"]
 
         assert "favorites" in updated_data
-        assert "17b53d9f-5db6-4f6a-808a-0769e99b5111" in updated_data["favorites"]
-        assert updated_data["favorites"]["17b53d9f-5db6-4f6a-808a-0769e99b5111"] == [
-            "The Kinks"
+        assert "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec" in updated_data["favorites"]
+        # Half Me has no aliases - should only contain the name itself
+        stored_variants = updated_data["favorites"][
+            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
         ]
+        assert stored_variants == ["Half Me"]
+        assert (
+            len(stored_variants) == 1
+        )  # Explicitly verify only one entry (no aliases)
 
 
 async def test_remove_favorite_empty_favorites(hass: HomeAssistant) -> None:
@@ -359,9 +414,9 @@ async def test_remove_favorite_empty_favorites(hass: HomeAssistant) -> None:
     )
     empty_entry.add_to_hass(hass)
 
-    # Try to remove from empty favorites
+    # Try to remove from empty favorites using MusicBrainz ID
     with pytest.raises(ServiceValidationError, match="not found"):
-        await remove_favorite(hass, empty_entry, "Any Band")
+        await remove_favorite(hass, empty_entry, "00000000-0000-0000-0000-000000000000")
 
 
 # Tests for resolve_artist_from_name function
@@ -454,9 +509,12 @@ async def test_resolve_artist_single_match_different_name(hass: HomeAssistant) -
 
         result = await resolve_artist_from_name(hass, "Maiden")
 
+        assert result is not None
         assert result["action"] == "choose"
-        assert len(result["options"]) == 1
-        assert result["options"][0] == {
+        options = result["options"]
+        assert isinstance(options, list)
+        assert len(options) == 1
+        assert options[0] == {
             "name": "Iron Maiden",
             "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
             "aliases": ["Maiden"],
@@ -491,10 +549,13 @@ async def test_resolve_artist_multiple_matches(hass: HomeAssistant) -> None:
 
         result = await resolve_artist_from_name(hass, "Black Sabbath")
 
+        assert result is not None
         assert result["action"] == "choose"
-        assert len(result["options"]) == 2
-        assert result["options"][0]["name"] == "Black Sabbath"
-        assert result["options"][1]["aliases"] == ["BS Tribute"]
+        options = result["options"]
+        assert isinstance(options, list)
+        assert len(options) == 2
+        assert options[0]["name"] == "Black Sabbath"
+        assert options[1]["aliases"] == ["BS Tribute"]
 
 
 async def test_resolve_artist_multiple_matches_limit_to_5(hass: HomeAssistant) -> None:
@@ -517,6 +578,7 @@ async def test_resolve_artist_multiple_matches_limit_to_5(hass: HomeAssistant) -
 
         result = await resolve_artist_from_name(hass, "Black Sabbath")
 
+        assert result is not None
         assert result["action"] == "choose"
         assert len(result["options"]) == 5  # Limited to 5
 
@@ -539,9 +601,12 @@ async def test_resolve_artist_missing_optional_fields(hass: HomeAssistant) -> No
 
         result = await resolve_artist_from_name(hass, "Different Name")
 
+        assert result is not None
         assert result["action"] == "choose"
-        assert len(result["options"]) == 1
-        option = result["options"][0]
+        options = result["options"]
+        assert isinstance(options, list)
+        assert len(options) == 1
+        option = options[0]
         assert option["name"] == "Minimal Band"
         assert option["musicbrainz_id"] == "minimal-id"
         assert option["aliases"] == []
@@ -577,3 +642,24 @@ async def test_resolve_artist_generic_exception(hass: HomeAssistant) -> None:
         result = await resolve_artist_from_name(hass, "Test Artist")
 
         assert result is None
+
+
+async def test_add_favorite_musicbrainz_error(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """Test add_favorite handles MusicBrainz API errors."""
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "homeassistant.components.music_favorites.models.MusicBrainzClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.get_artist_by_id = AsyncMock(
+            side_effect=MusicBrainzError("API error")
+        )
+
+        # Should raise ServiceValidationError with proper message
+        with pytest.raises(
+            ServiceValidationError, match="Could not fetch artist data from MusicBrainz"
+        ):
+            await add_favorite(hass, mock_config_entry, "test-musicbrainz-id")
