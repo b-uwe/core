@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -47,7 +47,8 @@ def mock_device_info():
 def entity_manager(hass: HomeAssistant, mock_config_entry, mock_device_info):
     """Create an EntityManager for testing."""
     mock_add_entities = MagicMock()
-    return EntityManager(hass, mock_config_entry, mock_add_entities)
+    device_info = DeviceInfo(**mock_device_info)
+    return EntityManager(hass, mock_config_entry, mock_add_entities, device_info)
 
 
 class TestEntityManager:
@@ -58,20 +59,18 @@ class TestEntityManager:
         assert entity_manager.hass is not None
         assert entity_manager.entry == mock_config_entry
         assert entity_manager._async_add_entities is not None
-        assert entity_manager._added_entities == set()
-        assert entity_manager._bands_device_info is not None
+        assert entity_manager._device_info is not None
 
     async def test_add_favorite_entity_new(self, entity_manager):
         """Test adding a new favorite entity."""
-        # Test data
-        musicbrainz_id = "test-id-123"
-        favorite_variants = ["Test Artist", "Test Alias"]
+        # Use a new MusicBrainz ID that's not in TEST_FAVORITES
+        musicbrainz_id = "5b11f4ce-a62d-471e-81fc-a69a8278c7da"  # Black Sabbath
+        favorite_variants = ["Black Sabbath"]
 
         # Call the method
         entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
 
-        # Verify entity was added
-        assert musicbrainz_id in entity_manager._added_entities
+        # Verify entity was created and added
         entity_manager._async_add_entities.assert_called_once()
 
         # Verify the entity was created correctly
@@ -83,54 +82,24 @@ class TestEntityManager:
         assert entity._favorite_variants == favorite_variants
 
     async def test_add_favorite_entity_duplicate(self, entity_manager):
-        """Test adding a duplicate favorite entity (should be ignored)."""
-        # Test data
-        musicbrainz_id = "test-id-123"
-        favorite_variants = ["Test Artist"]
+        """Test adding a duplicate entity (already in entity registry)."""
+        musicbrainz_id = "ca891d65-d9b0-4258-89f7-e6ba29d83767"  # Iron Maiden
+        favorite_variants = ["Iron Maiden"]
 
-        # Add entity first time
-        entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
-        assert entity_manager._async_add_entities.call_count == 1
+        # Mock entity registry to return existing entity
+        with patch(
+            "homeassistant.helpers.entity_registry.async_get"
+        ) as mock_get_registry:
+            mock_registry = mock_get_registry.return_value
+            mock_registry.async_get_entity_id.return_value = (
+                "sensor.music_favorites_iron_maiden"
+            )
 
-        # Try to add the same entity again
-        entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
+            # Try to add entity that already exists in registry
+            entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
 
-        # Verify it wasn't added again
-        assert entity_manager._async_add_entities.call_count == 1
-        assert musicbrainz_id in entity_manager._added_entities
-
-    async def test_sync_entities_with_config(self, entity_manager):
-        """Test syncing entities with config entry data."""
-        # Initial sync should add all favorites from config
-        entity_manager.sync_entities_with_config()
-
-        # Verify all favorites were added
-        assert entity_manager._async_add_entities.call_count == 1
-        call_args = entity_manager._async_add_entities.call_args[0][0]
-        assert len(call_args) == 2  # Two favorites in TEST_FAVORITES
-
-        # Verify entities were tracked
-        assert "ca891d65-d9b0-4258-89f7-e6ba29d83767" in entity_manager._added_entities
-        assert "f0d05c64-9959-4ae1-899b-acf51b97638c" in entity_manager._added_entities
-
-    async def test_sync_entities_with_config_no_new_entities(self, entity_manager):
-        """Test syncing when all entities are already added."""
-        # Add entities first
-        entity_manager.sync_entities_with_config()
-        assert entity_manager._async_add_entities.call_count == 1
-
-        # Sync again - should not add any new entities
-        entity_manager.sync_entities_with_config()
-        assert entity_manager._async_add_entities.call_count == 1
-
-    async def test_sync_entities_with_config_empty_favorites(self, entity_manager):
-        """Test syncing with empty favorites."""
-        # Clear favorites in config
-        entity_manager.entry.data = {"favorites": {}}
-
-        # Sync should not add any entities
-        entity_manager.sync_entities_with_config()
-        entity_manager._async_add_entities.assert_not_called()
+            # Verify it wasn't added (already exists in registry)
+            entity_manager._async_add_entities.assert_not_called()
 
 
 class TestFavoriteSensor:

@@ -1,5 +1,6 @@
 """Test Music Favorites MusicBrainz client functionality."""
 
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
@@ -64,7 +65,7 @@ async def test_search_artists_custom_limit(
     hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
 ) -> None:
     """Test artist search with custom limit."""
-    mock_response_data = {"artists": []}
+    mock_response_data: dict[str, list[dict[str, Any]]] = {"artists": []}
     mock_response = AsyncMock()
     mock_response.status = 200
     mock_response.json.return_value = mock_response_data
@@ -81,7 +82,7 @@ async def test_search_artists_no_results(
     hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
 ) -> None:
     """Test artist search with no results."""
-    mock_response_data = {"artists": []}
+    mock_response_data: dict[str, list[dict[str, Any]]] = {"artists": []}
     mock_response = AsyncMock()
     mock_response.status = 200
     mock_response.json.return_value = mock_response_data
@@ -186,7 +187,7 @@ async def test_search_artists_empty_response(
     hass: HomeAssistant, musicbrainz_client: MusicBrainzClient
 ) -> None:
     """Test artist search with empty response."""
-    mock_response_data = {}  # No "artists" key
+    mock_response_data: dict[str, Any] = {}  # No "artists" key
     mock_response = AsyncMock()
     mock_response.status = 200
     mock_response.json.return_value = mock_response_data

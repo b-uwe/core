@@ -692,3 +692,37 @@ async def test_add_favorite_musicbrainz_error(
             ServiceValidationError, match="Could not fetch artist data from MusicBrainz"
         ):
             await add_favorite(hass, mock_config_entry, "test-musicbrainz-id")
+
+
+async def test_add_favorite_no_entity_manager(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """Test adding favorite when entity manager is not available."""
+    mock_config_entry.add_to_hass(hass)
+
+    # Set up runtime_data without entity_manager
+    mock_config_entry.runtime_data = {"some_other_data": "value"}
+
+    with (
+        patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
+    ):
+        # Mock successful MusicBrainz response
+        mock_client = mock_client_class.return_value
+        mock_client.get_artist_by_id = AsyncMock(
+            return_value={
+                "name": "Test Band",
+                "aliases": [{"name": "Test Alias"}],
+            }
+        )
+
+        # Should add favorite but warn about missing entity manager
+        await add_favorite(hass, mock_config_entry, "test-musicbrainz-id")
+
+        # Verify config was updated
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args
+        updated_data = call_args[1]["data"]["favorites"]
+        assert "test-musicbrainz-id" in updated_data

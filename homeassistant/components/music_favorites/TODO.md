@@ -41,6 +41,7 @@
 - [ ] Add inc=url-rels parameter to API calls and store links with the entity data
 - [ ] Check for whether an act is still active
 - [ ] Attach BandsInTown
+- [ ] Attach setlist.fm
 - [ ] Pull Events
   - [ ] Reset entity-event-setup
 - [ ] Attribute the services used
@@ -50,8 +51,8 @@
 - [ ] Disallow modifying Config set up from YAML
 
 ### Phase 7: Favorite Types
-- [ ] **Split Acts into two** - distinguish bands from solo artists
 - [ ] **Add Festivals** - Allow defining favorite festivals
+- [ ] **Add Venues** - Allow defining favorite venues
 
 ## Architecture Notes
 

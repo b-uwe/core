@@ -34,29 +34,35 @@ async def test_entry_diagnostics(
     result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
 
     # Verify config entry info
-    assert result["config_entry"]["title"] == "Music Favorites"
-    assert result["config_entry"]["entry_id"] == entry.entry_id
-    assert result["config_entry"]["domain"] == "music_favorites"
+    config_entry_data = result["config_entry"]
+    assert isinstance(config_entry_data, dict)
+    assert config_entry_data["title"] == "Music Favorites"
+    assert config_entry_data["entry_id"] == entry.entry_id
+    assert config_entry_data["domain"] == "music_favorites"
 
     # Verify favorites statistics
     stats = result["favorites_statistics"]
+    assert isinstance(stats, dict)
     assert stats["total_favorites"] == 2
     assert stats["favorites_with_variants"] == 1  # Only test-id-1 has variants
     assert stats["average_variants_per_favorite"] == 1.5  # (2+1)/2
 
     # Verify favorites data
     favorites = result["favorites_data"]
+    assert isinstance(favorites, dict)
     assert "test-id-1" in favorites
     assert "test-id-2" in favorites
 
     # Check first favorite with variants
     favorite1 = favorites["test-id-1"]
+    assert isinstance(favorite1, dict)
     assert favorite1["display_name"] == "Test Band"
     assert favorite1["variant_count"] == 1
     assert favorite1["variants"] == ["TB"]
 
     # Check second favorite without variants
     favorite2 = favorites["test-id-2"]
+    assert isinstance(favorite2, dict)
     assert favorite2["display_name"] == "Solo Artist"
     assert favorite2["variant_count"] == 0
     assert favorite2["variants"] == []
@@ -87,6 +93,7 @@ async def test_entry_diagnostics_no_favorites(
 
     # Verify statistics for empty favorites
     stats = result["favorites_statistics"]
+    assert isinstance(stats, dict)
     assert stats["total_favorites"] == 0
     assert stats["favorites_with_variants"] == 0
     assert stats["average_variants_per_favorite"] == 0
@@ -149,10 +156,13 @@ async def test_entry_diagnostics_with_entity_states(
 
     # Verify that entity states are now included
     entity_states = result["entity_states"]
+    assert isinstance(entity_states, dict)
     assert "Test Band" in entity_states
 
     # Verify the entity state data
     test_band_state = entity_states["Test Band"]
+    assert isinstance(test_band_state, dict)
     assert test_band_state["state"] == "tracked"
+    assert isinstance(test_band_state["attributes"], dict)
     assert test_band_state["attributes"]["musicbrainz_id"] == "test-id-1"
     assert test_band_state["attributes"]["display_name"] == "Test Band"

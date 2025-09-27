@@ -152,7 +152,9 @@ async def test_user_flow_connection_error(hass: HomeAssistant) -> None:
 
         # Should show form with error
         assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
         assert result["errors"]["base"] == "cannot_connect"
+        assert result["description_placeholders"] is not None
         assert (
             "MusicBrainz API returned an error"
             in result["description_placeholders"]["note"]
@@ -186,6 +188,7 @@ async def test_user_flow_client_error(hass: HomeAssistant) -> None:
         )
 
         assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
         assert result["errors"]["base"] == "cannot_connect"
 
 
@@ -224,6 +227,7 @@ async def test_user_flow_connector_error(hass: HomeAssistant) -> None:
         )
 
         assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
         assert result["errors"]["base"] == "cannot_connect"
 
 
@@ -254,6 +258,7 @@ async def test_user_flow_timeout_error(hass: HomeAssistant) -> None:
         )
 
         assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
         assert result["errors"]["base"] == "timeout"
 
 
@@ -284,6 +289,7 @@ async def test_user_flow_generic_exception(hass: HomeAssistant) -> None:
         )
 
         assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
         assert result["errors"]["base"] == "unknown"
 
 
@@ -321,6 +327,7 @@ async def test_user_flow_retry_after_error(hass: HomeAssistant) -> None:
             result["flow_id"], user_input={}
         )
         assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
         assert result["errors"]["base"] == "cannot_connect"
 
         # Retry - should succeed

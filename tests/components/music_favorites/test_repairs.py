@@ -47,6 +47,7 @@ async def test_musicbrainz_repair_flow_init_step(hass: HomeAssistant) -> None:
     assert result["step_id"] == "init"
     assert "test_connection" in result["menu_options"]
     assert "ignore_issue" in result["menu_options"]
+    assert result["description_placeholders"] is not None
     assert result["description_placeholders"]["issue_details"] == "Connection failed"
 
 
@@ -60,6 +61,7 @@ async def test_musicbrainz_repair_flow_init_step_no_data(hass: HomeAssistant) ->
     result = await flow.async_step_init()
 
     assert result["type"] == FlowResultType.MENU
+    assert result["description_placeholders"] is not None
     assert result["description_placeholders"]["issue_details"] == "Unknown error"
 
 
@@ -74,6 +76,7 @@ async def test_musicbrainz_repair_flow_test_connection_form(
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "test_connection"
+    assert result["description_placeholders"] is not None
     assert "note" in result["description_placeholders"]
 
 
@@ -173,6 +176,7 @@ async def test_musicbrainz_repair_flow_test_result_failed(hass: HomeAssistant) -
     assert "retry_test" in result["menu_options"]
     assert "check_network" in result["menu_options"]
     assert "ignore_issue" in result["menu_options"]
+    assert result["description_placeholders"] is not None
     assert "Connection timeout" in result["description_placeholders"]["error"]
 
 
@@ -190,6 +194,7 @@ async def test_musicbrainz_repair_flow_test_result_unexpected_error(
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "test_result"
     assert result["last_step"] is True
+    assert result["description_placeholders"] is not None
     assert "Something went wrong" in result["description_placeholders"]["error"]
 
 
@@ -203,6 +208,7 @@ async def test_musicbrainz_repair_flow_test_result_no_data(hass: HomeAssistant) 
     result = await flow.async_step_test_result()
 
     assert result["type"] == FlowResultType.MENU
+    assert result["description_placeholders"] is not None
     assert "Connection failed" in result["description_placeholders"]["error"]
 
 
@@ -231,7 +237,9 @@ async def test_musicbrainz_repair_flow_check_network(hass: HomeAssistant) -> Non
     assert result["step_id"] == "check_network"
     assert result["last_step"] is True
     assert (
-        "Check your internet connection" in result["description_placeholders"]["steps"]
+        result["description_placeholders"] is not None
+        and "Check your internet connection"
+        in result["description_placeholders"]["steps"]
     )
 
 

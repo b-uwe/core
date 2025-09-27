@@ -77,7 +77,16 @@ async def add_favorite(
     if hasattr(entry, "runtime_data") and entry.runtime_data:
         entity_manager = entry.runtime_data.get("entity_manager")
         if entity_manager:
+            _LOGGER.debug("Calling entity_manager.add_favorite_entity for %s", name)
             entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
+        else:
+            _LOGGER.warning(
+                "Entity manager not found in runtime_data - new entity will not be created immediately"
+            )
+    else:
+        _LOGGER.warning(
+            "No runtime_data available - new entity will not be created immediately"
+        )
 
     _LOGGER.info("Successfully added favorite: %s", name)
 

@@ -544,24 +544,18 @@ async def test_track_command_multiple_matches_choose_best(
             user_input = MockUserInput("track Black Sabbath")
             result = await conversation_entity._async_handle_message(user_input, None)
 
-            # Verify response mentions multiple matches and best match selection
+            # Verify response presents choices to the user
             speech = result.response.as_dict()["speech"]["plain"]["speech"]
-            assert "Found multiple matches for black sabbath" in speech
-            assert "Adding the best match: BLACK SABBATH" in speech
+            assert "I found multiple artists named black sabbath" in speech
+            assert "1: Black Sabbath - British heavy metal band" in speech
+            assert "2: Black Sabbath - Tribute band" in speech
+            assert "Just say the number (1 to 2)" in speech
 
             # Verify resolve was called
             mock_resolve.assert_called_once_with(hass, "black sabbath")
 
-            # Verify add_favorite was called with only MusicBrainz ID (best match)
-            mock_add.assert_called_once()
-            call_args = mock_add.call_args[0]
-            assert call_args[0] is hass  # First arg is hass
-            assert (
-                call_args[1] == conversation_entity._entry
-            )  # Second arg is config entry
-            assert (
-                call_args[2] == "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
-            )  # Third arg is musicbrainz_id
+            # Verify add_favorite was NOT called (waiting for user choice)
+            mock_add.assert_not_called()
 
 
 async def test_track_command_multiple_matches_empty_options(
@@ -583,3 +577,132 @@ async def test_track_command_multiple_matches_empty_options(
         # Should fall through to the "Unrecognized command" response
         speech = result.response.as_dict()["speech"]["plain"]["speech"]
         assert "Unrecognized command" in speech
+
+
+async def test_number_choice_with_pending_choices(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test handling number input when there are pending choices."""
+    # Set up pending choices in runtime_data
+    conversation_entity._entry.runtime_data = {"pending_choices": ["id1", "id2", "id3"]}
+
+    with patch(
+        "homeassistant.components.music_favorites.conversation.add_favorite"
+    ) as mock_add:
+        mock_add.return_value = None
+
+        # Test valid choice
+        user_input = MockUserInput("2")
+        result = await conversation_entity._async_handle_message(user_input, None)
+
+        speech = result.response.as_dict()["speech"]["plain"]["speech"]
+        assert "Great! I've added your choice to favorites." in speech
+
+        # Verify add_favorite was called with correct ID
+        mock_add.assert_called_once_with(hass, conversation_entity._entry, "id2")
+
+        # Verify pending choices were cleared
+        assert "pending_choices" not in conversation_entity._entry.runtime_data
+
+
+async def test_number_choice_invalid_range(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test handling number input with invalid range."""
+    # Set up pending choices
+    conversation_entity._entry.runtime_data = {"pending_choices": ["id1", "id2"]}
+
+    # Test number too high
+    user_input = MockUserInput("5")
+    result = await conversation_entity._async_handle_message(user_input, None)
+
+    speech = result.response.as_dict()["speech"]["plain"]["speech"]
+    assert "Please choose a number between 1 and 2." in speech
+
+    # Test number too low
+    user_input = MockUserInput("0")
+    result = await conversation_entity._async_handle_message(user_input, None)
+
+    speech = result.response.as_dict()["speech"]["plain"]["speech"]
+    assert "Please choose a number between 1 and 2." in speech
+
+
+async def test_number_choice_no_pending_choices(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test handling number input when there are no pending choices."""
+    # No pending choices in runtime_data
+    conversation_entity._entry.runtime_data = {}
+
+    user_input = MockUserInput("1")
+    result = await conversation_entity._async_handle_message(user_input, None)
+
+    speech = result.response.as_dict()["speech"]["plain"]["speech"]
+    assert (
+        "I don't understand. Try saying 'track [artist]' or 'untrack [artist]'."
+        in speech
+    )
+
+
+async def test_number_choice_with_add_favorite_error(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test handling number input when add_favorite raises an error."""
+    # Set up pending choices
+    conversation_entity._entry.runtime_data = {"pending_choices": ["id1", "id2"]}
+
+    with patch(
+        "homeassistant.components.music_favorites.conversation.add_favorite"
+    ) as mock_add:
+        mock_add.side_effect = ServiceValidationError("Already exists")
+
+        user_input = MockUserInput("1")
+        result = await conversation_entity._async_handle_message(user_input, None)
+
+        speech = result.response.as_dict()["speech"]["plain"]["speech"]
+        assert (
+            "Sorry, there was an error adding that artist to your favorites. Please try again."
+            in speech
+        )
+
+
+async def test_cleanup_pending_choices_function(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test the background cleanup function for pending choices."""
+    # Set up pending choices in runtime_data
+    conversation_entity._entry.runtime_data = {"pending_choices": ["id1", "id2", "id3"]}
+
+    # Verify pending choices exist before cleanup
+    assert "pending_choices" in conversation_entity._entry.runtime_data
+
+    # Call the cleanup function with a very short timeout
+    await conversation_entity._cleanup_pending_choices(timeout=0.01)
+
+    # Verify pending choices were cleaned up
+    assert "pending_choices" not in conversation_entity._entry.runtime_data
+
+
+async def test_cleanup_pending_choices_with_no_runtime_data(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test cleanup function when runtime_data is None."""
+    # Set runtime_data to None
+    conversation_entity._entry.runtime_data = None
+
+    # Should not crash
+    await conversation_entity._cleanup_pending_choices(timeout=0.01)
+
+
+async def test_cleanup_pending_choices_with_no_pending_choices_key(
+    hass: HomeAssistant, conversation_entity
+) -> None:
+    """Test cleanup function when pending_choices key doesn't exist."""
+    # Set runtime_data without pending_choices key
+    conversation_entity._entry.runtime_data = {"other_data": "value"}
+
+    # Should not crash and preserve other data
+    await conversation_entity._cleanup_pending_choices(timeout=0.01)
+
+    # Verify other data is preserved
+    assert conversation_entity._entry.runtime_data == {"other_data": "value"}
