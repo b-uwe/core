@@ -189,9 +189,15 @@ async def add_favorite(
     band_status = determine_band_status(artist_data, events_data)
 
     # Add new favorite with name, aliases, and relation links from MusicBrainz
+    # Deduplicate variants using a set while preserving order (name first)
+    variants_set = {name}
     favorite_variants = [name]
+
     if aliases:
-        favorite_variants.extend(aliases)
+        for alias in aliases:
+            if alias not in variants_set:
+                variants_set.add(alias)
+                favorite_variants.append(alias)
 
     # Store variants, status, and flatten relation links directly into the data structure
     favorite_data = {

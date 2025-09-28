@@ -99,11 +99,15 @@ class MusicBrainzClient:
                 "name": artist["name"],
                 "disambiguation": artist.get("disambiguation", ""),
                 "score": int(artist.get("score", 0)),
-                "aliases": [
-                    alias.get("name", "")
-                    for alias in artist.get("aliases", [])
-                    if alias.get("name")  # Only include non-empty alias names
-                ],
+                "aliases": list(
+                    dict.fromkeys(
+                        [
+                            alias.get("name", "")
+                            for alias in artist.get("aliases", [])
+                            if alias.get("name")  # Only include non-empty alias names
+                        ]
+                    )
+                ),  # Remove duplicates while preserving order
             }
             for artist in artists
         ]

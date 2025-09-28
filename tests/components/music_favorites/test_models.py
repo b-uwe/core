@@ -1029,3 +1029,47 @@ async def test_add_favorite_includes_status_disbanded(hass: HomeAssistant) -> No
         stored_data = updated_data["disbanded-band-id"]
         assert "status" in stored_data
         assert stored_data["status"] == BandStatus.DISBANDED
+
+
+async def test_add_favorite_deduplicates_variants(hass: HomeAssistant) -> None:
+    """Test that add_favorite deduplicates variants when artist name appears in aliases."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Music Favorites",
+        data={"favorites": {}},
+        unique_id="music_favorites",
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
+    ):
+        mock_client = mock_client_class.return_value
+        # Mock artist where name "Asphyx" appears in both name and aliases (common MusicBrainz case)
+        mock_client.get_artist_by_id = AsyncMock(
+            return_value={
+                "name": "Asphyx",
+                "aliases": [
+                    {"name": "Asphyx"},  # Duplicate of main name
+                    {"name": "Asphyx"},  # Another duplicate
+                    {"name": "Soulburn"},  # Different alias
+                ],
+                "life-span": {"begin": "1987"},
+                "relations": [],
+            }
+        )
+
+        await add_favorite(hass, entry, "asphyx-test-id")
+
+        # Verify variants were deduplicated
+        mock_update.assert_called_once()
+        updated_data = mock_update.call_args[1]["data"]["favorites"]
+        stored_data = updated_data["asphyx-test-id"]
+
+        # Should only contain unique variants: ["Asphyx", "Soulburn"]
+        # Not ["Asphyx", "Asphyx", "Asphyx", "Soulburn"]
+        assert stored_data["variants"] == ["Asphyx", "Soulburn"]
+        assert len(stored_data["variants"]) == 2  # Explicitly verify count
