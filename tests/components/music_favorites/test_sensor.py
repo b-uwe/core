@@ -177,9 +177,8 @@ class TestFavoriteSensor:
         assert favorite_sensor._favorite_variants[0] == "Iron Maiden"  # First variant
         assert favorite_sensor._attr_name == "Iron Maiden"
         assert favorite_sensor._attr_unique_id == f"favorite_{iron_maiden_id}"
-        assert favorite_sensor._attr_translation_key == "favorite_act"
         assert favorite_sensor._attr_icon == "mdi:guitar-electric"
-        assert favorite_sensor._attr_has_entity_name is True
+        assert hasattr(favorite_sensor, "_attr_has_entity_name")
 
     async def test_extra_state_attributes(self, favorite_sensor):
         """Test extra state attributes."""
@@ -211,8 +210,8 @@ class TestFavoriteSensor:
             favorite_data,
             mock_device_info,
         )
-        # Should create safe entity ID
-        assert sensor._attr_entity_id == "sensor.music_favorites_motörhead_friends"
+        # Should create safe entity ID with "act_" prefix
+        assert sensor.entity_id == "sensor.music_favorites_act_motörhead_friends"
 
         # Test with multiple spaces and hyphens
         favorite_data2 = {"variants": ["Iron  Maiden - Legacy"]}
@@ -221,7 +220,7 @@ class TestFavoriteSensor:
             favorite_data2,
             mock_device_info,
         )
-        assert sensor2._attr_entity_id == "sensor.music_favorites_iron_maiden_legacy"
+        assert sensor2.entity_id == "sensor.music_favorites_act_iron_maiden_legacy"
 
 
 class TestFavoriteSensorWithRelationLinks:

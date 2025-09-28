@@ -79,20 +79,25 @@ class FavoriteSensor(SensorEntity):
         self._favorite_key = favorite_key
         self._favorite_data = favorite_data
         self._favorite_variants = favorite_data.get("variants", [])
-        self._attr_name = (
+        # Get the display name
+        display_name = (
             self._favorite_variants[0] if self._favorite_variants else "Unknown"
-        )  # Display name for the entity
-        self._attr_translation_key = "favorite_act"  # Translation key
+        )
+
+        # Set entity name to just the band/artist name
+        self._attr_name = display_name
+
         self._attr_unique_id = f"favorite_{favorite_key}"
         self._attr_device_info = device_info
-        # Create human-readable entity ID for easy YAML reference
-        # I rely on HA default behavior for duplicate entity ID's because
-        # what I had in mind to do, was basically the same
-        safe_name = re.sub(r"[^\w\s-]", "", self._favorite_variants[0].lower())
+
+        # Create entity ID as "music_favorites_act_{name.lower()}"
+        safe_name = re.sub(r"[^\w\s-]", "", display_name.lower())
         safe_name = re.sub(r"[-\s]+", "_", safe_name).strip("_")
-        self._attr_entity_id = f"sensor.music_favorites_{safe_name}"
+        # Set entity_id directly instead of _attr_entity_id
+        self.entity_id = f"sensor.music_favorites_act_{safe_name}"
+
         self._attr_icon = "mdi:guitar-electric"
-        self._attr_has_entity_name = True
+        self._attr_has_entity_name = False
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
