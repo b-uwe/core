@@ -49,3 +49,27 @@ HALF_ME_EXPECTED_RESULT = {
 
 # Count of relations for verification
 HALF_ME_RELATIONS_COUNT = len(HALF_ME_COMPLETE_RESPONSE["relations"])  # Should be 20
+
+# Complete HANABIE. (花冷え。) response for Unicode testing
+# From: /ws/2/artist/ce2703e5-34f4-4389-883f-00f8ca2662c2?inc=aliases+url-rels&fmt=json
+_HANABIE_JSON = """{"ipis":[],"country":"JP","life-span":{"ended":false,"end":null,"begin":"2015-06"},"id":"ce2703e5-34f4-4389-883f-00f8ca2662c2","name":"花冷え。","isnis":["0000000502987117"],"type-id":"e431f5f6-b5d2-343d-8b36-72607fffb74b","relations":[],"disambiguation":"metalcore band","end-area":null,"gender":null,"sort-name":"HANABIE.","area":{"disambiguation":"","name":"Japan","iso-3166-1-codes":["JP"],"type":null,"type-id":null,"id":"2db42837-c832-3c27-b4a3-08198f75693c","sort-name":"Japan"},"type":"Group","begin-area":{"type":null,"iso-3166-2-codes":["JP-13"],"disambiguation":"","name":"Tokyo","id":"8dc97297-ac95-4d33-82bc-e07fab26fb5f","sort-name":"Tokyo","type-id":null},"gender-id":null,"aliases":[{"end":null,"sort-name":"HANABIE.","ended":false,"primary":true,"locale":"en","type-id":"894afba6-2816-3c24-8072-eadb66bd04bc","name":"HANABIE.","begin":null,"type":"Artist name"},{"primary":true,"locale":"ja","end":null,"sort-name":"はなびえ","ended":false,"name":"花冷え。","begin":null,"type":"Artist name","type-id":"894afba6-2816-3c24-8072-eadb66bd04bc"}]}"""
+
+# Parse the complete HANABIE. response
+HANABIE_COMPLETE_RESPONSE = json.loads(_HANABIE_JSON)
+
+# Expected processed result after our client simplifies the response
+HANABIE_EXPECTED_RESULT = {
+    "id": "ce2703e5-34f4-4389-883f-00f8ca2662c2",
+    "name": "花冷え。",
+    "disambiguation": "metalcore band",
+    "score": 100,  # Score would come from search, not direct lookup
+    "aliases": [
+        "HANABIE.",
+        "花冷え。",
+    ],  # All real aliases from MusicBrainz
+}
+
+# Count of relations for verification
+HANABIE_RELATIONS_COUNT = len(
+    HANABIE_COMPLETE_RESPONSE["relations"]
+)  # Should be 0 (minimal response)

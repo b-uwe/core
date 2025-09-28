@@ -32,9 +32,9 @@ def mock_config_entry():
             "favorites": {
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767": {"variants": ["Iron Maiden"]},
                 "5182c1d9-c7d2-4dad-afa0-ccfeada921a8": {"variants": ["Black Sabbath"]},
-                "f0d05c64-9959-4ae1-899b-acf51b97638c": {
-                    "variants": ["Motörhead"]
-                },  # Using ö for testing unicode
+                "ce2703e5-34f4-4389-883f-00f8ca2662c2": {
+                    "variants": ["花冷え。"]
+                },  # Using Unicode characters for testing
             }
         },
         unique_id="music_favorites",
@@ -235,7 +235,7 @@ async def test_remove_favorite_success(
         # Verify "Iron Maiden" was removed but others remain
         assert "ca891d65-d9b0-4258-89f7-e6ba29d83767" not in updated_data["favorites"]
         assert "5182c1d9-c7d2-4dad-afa0-ccfeada921a8" in updated_data["favorites"]
-        assert "f0d05c64-9959-4ae1-899b-acf51b97638c" in updated_data["favorites"]
+        assert "ce2703e5-34f4-4389-883f-00f8ca2662c2" in updated_data["favorites"]
 
         # Verify entity registry cleanup was attempted
         mock_entity_registry.async_get_entity_id.assert_called_once_with(
@@ -297,7 +297,7 @@ async def test_remove_favorite_unicode(
     ):
         # Remove the unicode favorite by MusicBrainz ID
         await remove_favorite(
-            hass, mock_config_entry, "f0d05c64-9959-4ae1-899b-acf51b97638c"
+            hass, mock_config_entry, "ce2703e5-34f4-4389-883f-00f8ca2662c2"
         )
 
         # Verify it was removed
@@ -305,7 +305,7 @@ async def test_remove_favorite_unicode(
         call_args = mock_update.call_args
         updated_data = call_args[1]["data"]
 
-        assert "f0d05c64-9959-4ae1-899b-acf51b97638c" not in updated_data["favorites"]
+        assert "ce2703e5-34f4-4389-883f-00f8ca2662c2" not in updated_data["favorites"]
 
         # Verify the config entry was reloaded (to update UI)
         # Note: No longer reloading config entry - using dynamic entity management instead
