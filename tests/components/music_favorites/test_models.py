@@ -802,7 +802,7 @@ def test_determine_band_status_on_tour() -> None:
     current_date = datetime.now()
     event_date = current_date + timedelta(days=15)  # Within 30-day preview window
 
-    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.ON_TOUR
@@ -818,7 +818,7 @@ def test_determine_band_status_tour_planned() -> None:
         days=60
     )  # Beyond 30-day preview but within 180-day planning
 
-    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.TOUR_PLANNED
@@ -840,7 +840,7 @@ def test_get_tour_status_on_tour() -> None:
 
     # Event within preview window (next 30 days)
     event_date = current_date + timedelta(days=15)
-    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR
@@ -853,7 +853,7 @@ def test_get_tour_status_on_tour_grace_period() -> None:
 
     # Event 1 day ago (within 2-day grace period)
     event_date = current_date - timedelta(days=1)
-    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR
@@ -866,7 +866,7 @@ def test_get_tour_status_tour_planned() -> None:
 
     # Event beyond preview window but within planning window
     event_date = current_date + timedelta(days=60)
-    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.TOUR_PLANNED
@@ -879,7 +879,7 @@ def test_get_tour_status_no_relevant_events() -> None:
 
     # Event too far in future (beyond 180-day planning window)
     event_date = current_date + timedelta(days=200)
-    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
 
     status = get_tour_status(events_data)
     assert status is None
@@ -892,50 +892,39 @@ def test_get_tour_status_empty_events() -> None:
     assert status is None
 
 
-def test_get_tour_status_invalid_date_formats() -> None:
-    """Test get_tour_status handles various date formats."""
+def test_get_tour_status_bandsintown_with_invalid_dates() -> None:
+    """Test get_tour_status handles Bandsintown format with some invalid dates."""
 
     current_date = datetime.now()
 
     events_data: list[dict[str, Any]] = [
         {
-            "time": (current_date + timedelta(days=15)).strftime("%Y-%m-%d")
-        },  # YYYY-MM-DD
-        {"time": (current_date + timedelta(days=16)).strftime("%Y-%m")},  # YYYY-MM
-        {"time": (current_date + timedelta(days=17)).strftime("%Y")},  # YYYY
-        {"time": "invalid-date"},  # Invalid format (should be skipped)
-        {
-            "life-span": {
-                "begin": (current_date + timedelta(days=18)).strftime("%Y-%m-%d")
-            }
-        },  # Alternative field
+            "start_date": (current_date + timedelta(days=15)).strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            )
+        },  # ISO datetime format (Bandsintown format)
+        {"start_date": "invalid-date"},  # Invalid format (should be skipped)
     ]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR  # Should find valid dates
 
 
-def test_get_tour_status_short_date_formats() -> None:
-    """Test get_tour_status handles YYYY-MM and YYYY formats specifically."""
+def test_get_tour_status_bandsintown_format() -> None:
+    """Test get_tour_status handles Bandsintown ISO datetime format."""
 
     current_date = datetime.now()
 
-    # Test YYYY-MM format (line 87-88)
+    # Test Bandsintown ISO datetime format
     events_data = [
         {
-            "time": (current_date + timedelta(days=15)).strftime("%Y-%m")
-        }  # YYYY-MM format
+            "start_date": (current_date + timedelta(days=15)).strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            )
+        }  # ISO datetime format (Bandsintown format)
     ]
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR
-
-    # Test YYYY format (line 89-90) - use current year to ensure it's within window
-    events_data = [
-        {"time": str(current_date.year)}  # YYYY format for current year
-    ]
-    status = get_tour_status(events_data)
-    # For YYYY format, it defaults to Jan 1st of that year, which might be past or future
-    # The important thing is that it doesn't crash and processes the date format
     assert status in [BandStatus.ON_TOUR, BandStatus.TOUR_PLANNED, None]
 
 

@@ -77,19 +77,20 @@ def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
     closest_days_away = float("inf")
 
     for event in events_data:
-        # Extract date from event - format depends on future data source
-        event_date_str = event.get("time") or event.get("life-span", {}).get("begin")
+        # Extract date from event
+        # Bandsintown format: event.get("start_date")
+        event_date_str = (
+            event.get("start_date")  # Bandsintown format
+        )
         if not event_date_str:
             continue
 
         try:
             # Parse date (handle various formats)
-            if len(event_date_str) == 10:  # YYYY-MM-DD
-                event_date = datetime.strptime(event_date_str, "%Y-%m-%d")
-            elif len(event_date_str) == 7:  # YYYY-MM
-                event_date = datetime.strptime(event_date_str + "-01", "%Y-%m-%d")
-            elif len(event_date_str) == 4:  # YYYY
-                event_date = datetime.strptime(event_date_str + "-01-01", "%Y-%m-%d")
+            if (
+                len(event_date_str) == 19 and "T" in event_date_str
+            ):  # ISO datetime: YYYY-MM-DDTHH:MM:SS
+                event_date = datetime.strptime(event_date_str, "%Y-%m-%dT%H:%M:%S")
             else:
                 continue
 
@@ -147,10 +148,6 @@ async def add_favorite(
             f"Could not fetch artist data from MusicBrainz: {err}"
         ) from err
 
-    # Skip events data for now - MusicBrainz events are unreliable
-    # Framework kept for future integration with better event sources
-    events_data: list[dict[str, Any]] = []
-
     # Extract name and aliases from MusicBrainz response
     name = artist_data["name"]
     aliases = [
@@ -161,6 +158,9 @@ async def add_favorite(
 
     # Extract relation links
     relation_links = extract_relation_links(artist_data)
+
+    # Initialize events data - will be populated from Bandsintown if available
+    events_data: list[dict[str, Any]] = []
 
     # Extract LD+JSON data from Bandsintown URL if available
     bandsintown_url = relation_links.get("bandsintown_url")
@@ -174,11 +174,16 @@ async def add_favorite(
                 "Extracted %d LD+JSON objects from Bandsintown", len(ldjson_data)
             )
 
-            # Parse MusicEvents for future calendar integration
+            # Parse MusicEvents and use them for status determination
             music_events = extract_music_events(ldjson_data)
             if music_events:
                 _LOGGER.info(
-                    "Found %d upcoming events for %s:", len(music_events), name
+                    "Found %d events for %s - will use for status determination",
+                    len(music_events),
+                    name,
+                )
+                events_data = (
+                    music_events  # Use Bandsintown events for status determination
                 )
 
         except LdJsonError as err:
@@ -186,7 +191,7 @@ async def add_favorite(
     else:
         _LOGGER.debug("No Bandsintown URL found for artist %s", name)
 
-    # Determine band status with events data
+    # Determine band status with events data (now using Bandsintown events if available)
     band_status = determine_band_status(artist_data, events_data)
 
     # Add new favorite with name, aliases, and relation links from MusicBrainz
