@@ -23,9 +23,9 @@ def mock_config_entry():
         title="Music Favorites",
         data={
             "favorites": {
-                "f0d05c64-9959-4ae1-899b-acf51b97638c": ["Motörhead"],
-                "ca891d65-d9b0-4258-89f7-e6ba29d83767": ["Iron Maiden"],
-                "5b11f4ce-a62d-471e-81fc-a69a8278c7da": ["Black Sabbath"],
+                "f0d05c64-9959-4ae1-899b-acf51b97638c": {"variants": ["Motörhead"]},
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767": {"variants": ["Iron Maiden"]},
+                "5b11f4ce-a62d-471e-81fc-a69a8278c7da": {"variants": ["Black Sabbath"]},
             }
         },
         unique_id="music_favorites",

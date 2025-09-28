@@ -23,7 +23,7 @@ def mock_config_entry():
     return MockConfigEntry(
         domain=DOMAIN,
         title="Music Favorites",
-        data={"favorites": {"test-id": ["Test Band"]}},
+        data={"favorites": {"test-id": {"variants": ["Test Band"]}}},
         unique_id="music_favorites",
     )
 

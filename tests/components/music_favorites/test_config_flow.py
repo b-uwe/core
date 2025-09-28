@@ -22,8 +22,13 @@ def _assert_default_bands_present(result_data: Mapping[str, Any]) -> None:
     assert "f9b57146-c5ce-41ad-adfb-ee904a4f7b19" in favorites  # Misery Index
     assert "ab81255c-7a4f-4528-bb77-4a3fbd8e8317" in favorites  # Jungle Rot
 
-    # Verify at least one band name is correct
-    assert favorites["f0d05c64-9959-4ae1-899b-acf51b97638c"] == ["Dyscarnate"]
+    # Verify at least one band data structure is correct (with relation URLs)
+    dyscarnate_data = favorites["f0d05c64-9959-4ae1-899b-acf51b97638c"]
+    assert dyscarnate_data["variants"] == ["Dyscarnate"]
+    assert "allmusic_url" in dyscarnate_data
+    assert "bandsintown_url" in dyscarnate_data
+    assert "discogs_url" in dyscarnate_data
+    assert "songkick_url" in dyscarnate_data
 
 
 async def test_user_flow_success(hass: HomeAssistant, mock_musicbrainz_client) -> None:

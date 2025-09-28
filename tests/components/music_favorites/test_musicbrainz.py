@@ -9,11 +9,15 @@ import pytest
 from homeassistant.components.music_favorites.musicbrainz import (
     MusicBrainzClient,
     MusicBrainzError,
+    extract_relation_links,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
-from .fixtures.musicbrainz_responses import IRON_MAIDEN_COMPLETE_RESPONSE
+from .fixtures.musicbrainz_responses import (
+    HALF_ME_COMPLETE_RESPONSE,
+    IRON_MAIDEN_COMPLETE_RESPONSE,
+)
 
 
 @pytest.fixture
@@ -328,3 +332,150 @@ async def test_get_artist_by_id_with_minimal_data(
     assert result == minimal_artist_data
     assert result["name"] == "Test Artist"
     assert result["id"] == "test-id"
+
+
+def test_extract_relation_links_iron_maiden() -> None:
+    """Test extracting relation links from Iron Maiden's complete MusicBrainz response."""
+    relation_links = extract_relation_links(IRON_MAIDEN_COMPLETE_RESPONSE)
+
+    # Verify we extracted the expected relations from RELATIONS_OF_INTEREST
+    assert "allmusic_url" in relation_links
+    assert "bandsintown_url" in relation_links
+    assert "discogs_url" in relation_links
+    assert "songkick_url" in relation_links
+
+    # Check actual URLs match the fixture data
+    assert (
+        relation_links["allmusic_url"] == "https://www.allmusic.com/artist/mn0000098465"
+    )
+    assert relation_links["bandsintown_url"] == "https://www.bandsintown.com/a/1301"
+    assert relation_links["discogs_url"] == "https://www.discogs.com/artist/251595"
+    assert relation_links["songkick_url"] == "https://www.songkick.com/artists/438390"
+
+    # Ensure we only extracted URL and name attributes (no other relation types)
+    for key in relation_links:
+        assert key.endswith(("_url", "_name"))
+
+
+def test_extract_relation_links_half_me() -> None:
+    """Test extracting relation links from Half Me's complete MusicBrainz response."""
+    relation_links = extract_relation_links(HALF_ME_COMPLETE_RESPONSE)
+
+    # Verify we extracted the expected relations from RELATIONS_OF_INTEREST
+    assert "allmusic_url" in relation_links
+    assert "bandsintown_url" in relation_links
+    assert "discogs_url" in relation_links
+    assert "songkick_url" in relation_links
+
+    # Check actual URLs match the fixture data
+    assert (
+        relation_links["allmusic_url"] == "https://www.allmusic.com/artist/mn0004372703"
+    )
+    assert relation_links["bandsintown_url"] == "https://www.bandsintown.com/a/15548431"
+    assert relation_links["discogs_url"] == "https://www.discogs.com/artist/12559079"
+    assert relation_links["songkick_url"] == "https://www.songkick.com/artists/10118274"
+
+
+def test_extract_relation_links_no_relations() -> None:
+    """Test extracting relation links from artist data with no relations."""
+    artist_data = {
+        "id": "test-id",
+        "name": "Test Artist",
+        # No relations field
+    }
+
+    relation_links = extract_relation_links(artist_data)
+    assert relation_links == {}
+
+
+def test_extract_relation_links_empty_relations() -> None:
+    """Test extracting relation links from artist data with empty relations."""
+    artist_data = {
+        "id": "test-id",
+        "name": "Test Artist",
+        "relations": [],
+    }
+
+    relation_links = extract_relation_links(artist_data)
+    assert relation_links == {}
+
+
+def test_extract_relation_links_no_matching_relations() -> None:
+    """Test extracting relation links when no relations match RELATIONS_OF_INTEREST."""
+    artist_data = {
+        "id": "test-id",
+        "name": "Test Artist",
+        "relations": [
+            {
+                "type": "wikipedia",  # Not in RELATIONS_OF_INTEREST
+                "url": {"resource": "https://en.wikipedia.org/wiki/Test_Artist"},
+            },
+            {
+                "type": "youtube",  # Not in RELATIONS_OF_INTEREST
+                "url": {"resource": "https://www.youtube.com/testartist"},
+            },
+        ],
+    }
+
+    relation_links = extract_relation_links(artist_data)
+    assert relation_links == {}
+
+
+def test_extract_relation_links_missing_url_data() -> None:
+    """Test extracting relation links when relations are missing url data."""
+    artist_data = {
+        "id": "test-id",
+        "name": "Test Artist",
+        "relations": [
+            {
+                "type": "allmusic",
+                # Missing url field
+            },
+            {
+                "type": "bandsintown",
+                "url": {},  # Empty url object
+            },
+            {
+                "type": "discogs",
+                "url": {"resource": None},  # None resource
+            },
+            {
+                "type": "songkick",
+                "url": {"resource": ""},  # Empty resource
+            },
+        ],
+    }
+
+    relation_links = extract_relation_links(artist_data)
+    assert relation_links == {}
+
+
+def test_extract_relation_links_partial_matches() -> None:
+    """Test extracting relation links when only some relations are in RELATIONS_OF_INTEREST."""
+    artist_data = {
+        "id": "test-id",
+        "name": "Test Artist",
+        "relations": [
+            {
+                "type": "allmusic",
+                "url": {"resource": "https://www.allmusic.com/artist/test"},
+            },
+            {
+                "type": "wikipedia",  # Not in RELATIONS_OF_INTEREST
+                "url": {"resource": "https://en.wikipedia.org/wiki/Test"},
+            },
+            {
+                "type": "discogs",
+                "url": {"resource": "https://www.discogs.com/artist/test"},
+            },
+        ],
+    }
+
+    relation_links = extract_relation_links(artist_data)
+
+    # Should only extract allmusic and discogs (the ones in RELATIONS_OF_INTEREST)
+    expected = {
+        "allmusic_url": "https://www.allmusic.com/artist/test",
+        "discogs_url": "https://www.discogs.com/artist/test",
+    }
+    assert relation_links == expected

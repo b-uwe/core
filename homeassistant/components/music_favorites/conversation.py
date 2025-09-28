@@ -93,10 +93,11 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 # Find the MusicBrainz ID for the artist name
                 current_favorites = self._entry.data.get("favorites", {})
                 musicbrainz_id_to_remove = None
-                for musicbrainz_id, names in current_favorites.items():
+                for musicbrainz_id, favorite_data in current_favorites.items():
+                    variants = favorite_data.get("variants", [])
                     if any(
                         stored_name.lower() == artist_name.lower()
-                        for stored_name in names
+                        for stored_name in variants
                     ):
                         musicbrainz_id_to_remove = musicbrainz_id
                         break

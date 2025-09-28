@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import VERSION
+from .const import RELATIONS_OF_INTEREST, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -165,3 +165,38 @@ class MusicBrainzClient:
         )
 
         return data
+
+
+def extract_relation_links(artist_data: dict[str, Any]) -> dict[str, str]:
+    """Extract relevant relation links from MusicBrainz artist data.
+
+    Args:
+        artist_data: Complete MusicBrainz artist data with relations
+
+    Returns:
+        Dictionary with relation URLs as direct attributes
+    """
+    relation_attributes = {}
+
+    relations = artist_data.get("relations", [])
+    for relation in relations:
+        relation_type = relation.get("type")
+        # Check if relation type matches any in RELATIONS_OF_INTEREST (case insensitive)
+        if any(
+            relation_type.lower() == interest.lower()
+            for interest in RELATIONS_OF_INTEREST
+        ):
+            url_data = relation.get("url")
+            if url_data and url_data.get("resource"):
+                # Store only URL as attribute
+                url_attr = f"{relation_type.lower()}_url"
+                relation_attributes[url_attr] = url_data["resource"]
+
+    _LOGGER.debug(
+        "Extracted %d relation URLs for artist '%s': %s",
+        len(relation_attributes),
+        artist_data.get("name", "Unknown"),
+        list(relation_attributes.keys()),
+    )
+
+    return relation_attributes

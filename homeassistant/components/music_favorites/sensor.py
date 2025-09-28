@@ -40,12 +40,15 @@ class EntityManager:
 
     @callback
     def add_favorite_entity(
-        self, musicbrainz_id: str, favorite_variants: list[str]
+        self, musicbrainz_id: str, favorite_data: dict[str, Any]
     ) -> None:
         """Add a new favorite entity."""
+        favorite_variants = favorite_data.get("variants", [])
+        display_name = favorite_variants[0] if favorite_variants else "Unknown"
+
         _LOGGER.debug(
             "add_favorite_entity called for %s (%s)",
-            favorite_variants[0],
+            display_name,
             musicbrainz_id,
         )
 
@@ -56,33 +59,36 @@ class EntityManager:
         if entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id):
             _LOGGER.debug(
                 "Entity for %s already exists in registry, skipping",
-                favorite_variants[0],
+                display_name,
             )
             return
 
         # Entity doesn't exist, create it
-        entity = FavoriteSensor(musicbrainz_id, favorite_variants, self._device_info)
+        entity = FavoriteSensor(musicbrainz_id, favorite_data, self._device_info)
         self._async_add_entities([entity])
-        _LOGGER.debug("Entity created and added for %s", favorite_variants[0])
+        _LOGGER.debug("Entity created and added for %s", display_name)
 
 
 class FavoriteSensor(SensorEntity):
     """Sensor for a single favorite."""
 
     def __init__(
-        self, favorite_key: str, favorite_variants: list[str], device_info: DeviceInfo
+        self, favorite_key: str, favorite_data: dict[str, Any], device_info: DeviceInfo
     ) -> None:
         """Initialize the favorite sensor."""
         self._favorite_key = favorite_key
-        self._favorite_variants = favorite_variants
-        self._attr_name = favorite_variants[0]  # Display name for the entity
+        self._favorite_data = favorite_data
+        self._favorite_variants = favorite_data.get("variants", [])
+        self._attr_name = (
+            self._favorite_variants[0] if self._favorite_variants else "Unknown"
+        )  # Display name for the entity
         self._attr_translation_key = "favorite_act"  # Translation key
         self._attr_unique_id = f"favorite_{favorite_key}"
         self._attr_device_info = device_info
         # Create human-readable entity ID for easy YAML reference
         # I rely on HA default behavior for duplicate entity ID's because
         # what I had in mind to do, was basically the same
-        safe_name = re.sub(r"[^\w\s-]", "", favorite_variants[0].lower())
+        safe_name = re.sub(r"[^\w\s-]", "", self._favorite_variants[0].lower())
         safe_name = re.sub(r"[-\s]+", "_", safe_name).strip("_")
         self._attr_entity_id = f"sensor.music_favorites_{safe_name}"
         self._attr_icon = "mdi:guitar-electric"
@@ -91,10 +97,21 @@ class FavoriteSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         """Attributes of the entity."""
-        return {
+        attributes = {
             "musicbrainz_id": self._favorite_key,
             "variants": self._favorite_variants[1:],  # All except display name
         }
+
+        # Add all relation links as individual attributes
+        attributes.update(
+            {
+                key: value
+                for key, value in self._favorite_data.items()
+                if key.endswith("_url")  # Only include relation URL attributes
+            }
+        )
+
+        return attributes
 
     @property
     def native_value(self) -> str | None:
@@ -126,10 +143,10 @@ async def async_setup_entry(
     entry.runtime_data["entity_manager"] = entity_manager
 
     # Create entities for all existing favorites in config data
-    favorites_data: dict[str, list[str]] = entry.data.get("favorites", {})
+    favorites_data = entry.data.get("favorites", {})
     initial_entities = []
-    for musicbrainz_id, favorite_variants in favorites_data.items():
-        entity = FavoriteSensor(musicbrainz_id, favorite_variants, device_info)
+    for musicbrainz_id, favorite_data in favorites_data.items():
+        entity = FavoriteSensor(musicbrainz_id, favorite_data, device_info)
         initial_entities.append(entity)
 
     if initial_entities:

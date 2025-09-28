@@ -30,11 +30,11 @@ def mock_config_entry():
         title="Music Favorites",
         data={
             "favorites": {
-                "ca891d65-d9b0-4258-89f7-e6ba29d83767": ["Iron Maiden"],
-                "5182c1d9-c7d2-4dad-afa0-ccfeada921a8": ["Black Sabbath"],
-                "f0d05c64-9959-4ae1-899b-acf51b97638c": [
-                    "Motörhead"
-                ],  # Using ö for testing unicode
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767": {"variants": ["Iron Maiden"]},
+                "5182c1d9-c7d2-4dad-afa0-ccfeada921a8": {"variants": ["Black Sabbath"]},
+                "f0d05c64-9959-4ae1-899b-acf51b97638c": {
+                    "variants": ["Motörhead"]
+                },  # Using ö for testing unicode
             }
         },
         unique_id="music_favorites",
@@ -82,11 +82,11 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
         assert updated_entry == mock_config_entry
         assert "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec" in updated_data["favorites"]
         # Half Me has no aliases - should only contain the name itself
-        expected_variants = ["Half Me"]
-        assert (
-            updated_data["favorites"]["963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"]
-            == expected_variants
-        )
+        stored_data = updated_data["favorites"]["963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"]
+        assert stored_data["variants"] == ["Half Me"]
+        # Should also have relation links
+        assert "allmusic_url" in stored_data
+        assert "bandsintown_url" in stored_data
 
         # Note: No longer reloading config entry - using dynamic entity management instead
 
@@ -124,8 +124,15 @@ async def test_add_favorite_with_entity_manager(
         assert "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec" in updated_data
 
         # Verify the entity manager was called to add the entity dynamically
+        expected_favorite_data = {
+            "variants": ["Half Me"],
+            "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
+            "bandsintown_url": "https://www.bandsintown.com/a/15548431",
+            "discogs_url": "https://www.discogs.com/artist/12559079",
+            "songkick_url": "https://www.songkick.com/artists/10118274",
+        }
         mock_entity_manager.add_favorite_entity.assert_called_once_with(
-            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec", ["Half Me"]
+            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec", expected_favorite_data
         )
 
 
@@ -194,10 +201,11 @@ async def test_add_favorite_unicode_handling(
         # The ID should be the MusicBrainz ID
         assert "different-unicode-id-123" in updated_data["favorites"]
         # Iron Maiden should be stored with name + aliases (including unicode)
+        stored_data = updated_data["favorites"]["different-unicode-id-123"]
         expected_variants = ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"]
-        assert (
-            updated_data["favorites"]["different-unicode-id-123"] == expected_variants
-        )
+        assert stored_data["variants"] == expected_variants
+        # Should also have relation links
+        assert "allmusic_url" in stored_data
 
 
 async def test_remove_favorite_success(
@@ -379,10 +387,10 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
         mock_update.assert_called_once()
         updated_data = mock_update.call_args[1]["data"]["favorites"]
         assert "ca891d65-d9b0-4258-89f7-e6ba29d83767" in updated_data
-        stored_variants = updated_data["ca891d65-d9b0-4258-89f7-e6ba29d83767"]
+        stored_data = updated_data["ca891d65-d9b0-4258-89f7-e6ba29d83767"]
         # Iron Maiden has name + real aliases from MusicBrainz
         expected_variants = ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"]
-        assert stored_variants == expected_variants
+        assert stored_data["variants"] == expected_variants
 
         # Verify reload was called
         # Note: No longer reloading config entry - using dynamic entity management instead
@@ -423,12 +431,10 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
         assert "favorites" in updated_data
         assert "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec" in updated_data["favorites"]
         # Half Me has no aliases - should only contain the name itself
-        stored_variants = updated_data["favorites"][
-            "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
-        ]
-        assert stored_variants == ["Half Me"]
+        stored_data = updated_data["favorites"]["963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"]
+        assert stored_data["variants"] == ["Half Me"]
         assert (
-            len(stored_variants) == 1
+            len(stored_data["variants"]) == 1
         )  # Explicitly verify only one entry (no aliases)
 
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
-from .musicbrainz import MusicBrainzClient, MusicBrainzError
+from .musicbrainz import MusicBrainzClient, MusicBrainzError, extract_relation_links
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -16,12 +16,30 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# The main favorites storage - a hopefully smart structure for fast lookups and variants
-# Format: {"MusicBrainz ID": ["Display Name", "variant1", "variant2", ...]}
-favorites: dict[str, list[str]] = {
-    "f0d05c64-9959-4ae1-899b-acf51b97638c": ["Dyscarnate"],
-    "f9b57146-c5ce-41ad-adfb-ee904a4f7b19": ["Misery Index"],
-    "ab81255c-7a4f-4528-bb77-4a3fbd8e8317": ["Jungle Rot"],
+# The main favorites storage - structure with variants and relation links
+# Format: {"MusicBrainz ID": {"variants": ["Display Name", "variant1", ...], "allmusic_url": "...", ...}}
+favorites: dict[str, dict[str, Any]] = {
+    "f0d05c64-9959-4ae1-899b-acf51b97638c": {
+        "variants": ["Dyscarnate"],
+        "allmusic_url": "https://www.allmusic.com/artist/mn0002579371",
+        "bandsintown_url": "https://www.bandsintown.com/a/249312",
+        "discogs_url": "https://www.discogs.com/artist/1817281",
+        "songkick_url": "https://www.songkick.com/artists/2399543",
+    },
+    "f9b57146-c5ce-41ad-adfb-ee904a4f7b19": {
+        "variants": ["Misery Index"],
+        "allmusic_url": "https://www.allmusic.com/artist/mn0000500134",
+        "bandsintown_url": "https://www.bandsintown.com/a/4488",
+        "discogs_url": "https://www.discogs.com/artist/518265",
+        "songkick_url": "https://www.songkick.com/artists/49739",
+    },
+    "ab81255c-7a4f-4528-bb77-4a3fbd8e8317": {
+        "variants": ["Jungle Rot"],
+        "allmusic_url": "https://www.allmusic.com/artist/mn0000310088",
+        "bandsintown_url": "https://www.bandsintown.com/a/13217",
+        "discogs_url": "https://www.discogs.com/artist/606841",
+        "songkick_url": "https://www.songkick.com/artists/478835",
+    },
 }
 
 
@@ -60,11 +78,20 @@ async def add_favorite(
         if alias.get("name")  # Only include non-empty alias names
     ]
 
-    # Add new favorite with name and aliases from MusicBrainz
+    # Extract relation links
+    relation_links = extract_relation_links(artist_data)
+
+    # Add new favorite with name, aliases, and relation links from MusicBrainz
     favorite_variants = [name]
     if aliases:
         favorite_variants.extend(aliases)
-    current_favorites[musicbrainz_id] = favorite_variants
+
+    # Store variants and flatten relation links directly into the data structure
+    favorite_data = {
+        "variants": favorite_variants,
+        **relation_links,  # Flatten relation links  into the object
+    }
+    current_favorites[musicbrainz_id] = favorite_data
 
     # Update the config entry
     hass.config_entries.async_update_entry(
@@ -78,7 +105,7 @@ async def add_favorite(
         entity_manager = entry.runtime_data.get("entity_manager")
         if entity_manager:
             _LOGGER.debug("Calling entity_manager.add_favorite_entity for %s", name)
-            entity_manager.add_favorite_entity(musicbrainz_id, favorite_variants)
+            entity_manager.add_favorite_entity(musicbrainz_id, favorite_data)
         else:
             _LOGGER.warning(
                 "Entity manager not found in runtime_data - new entity will not be created immediately"
@@ -109,11 +136,9 @@ async def remove_favorite(
         )
 
     # Get the name for logging
-    favorite_name = (
-        current_favorites[musicbrainz_id][0]
-        if current_favorites[musicbrainz_id]
-        else "Unknown"
-    )
+    favorite_data = current_favorites[musicbrainz_id]
+    variants = favorite_data.get("variants", [])
+    favorite_name = variants[0] if variants else "Unknown"
 
     # Remove the favorite
     del current_favorites[musicbrainz_id]
