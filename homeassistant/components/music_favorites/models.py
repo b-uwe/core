@@ -117,32 +117,7 @@ def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
 
 # The main favorites storage - structure with variants and relation links
 # Format: {"MusicBrainz ID": {"variants": ["Display Name", "variant1", ...], "allmusic_url": "...", ...}}
-favorites: dict[str, dict[str, Any]] = {
-    "f0d05c64-9959-4ae1-899b-acf51b97638c": {
-        "variants": ["Dyscarnate"],
-        "status": BandStatus.ACTIVE,
-        "allmusic_url": "https://www.allmusic.com/artist/mn0002579371",
-        "bandsintown_url": "https://www.bandsintown.com/a/249312",
-        "discogs_url": "https://www.discogs.com/artist/1817281",
-        "songkick_url": "https://www.songkick.com/artists/2399543",
-    },
-    "f9b57146-c5ce-41ad-adfb-ee904a4f7b19": {
-        "variants": ["Misery Index"],
-        "status": BandStatus.ACTIVE,
-        "allmusic_url": "https://www.allmusic.com/artist/mn0000500134",
-        "bandsintown_url": "https://www.bandsintown.com/a/4488",
-        "discogs_url": "https://www.discogs.com/artist/518265",
-        "songkick_url": "https://www.songkick.com/artists/49739",
-    },
-    "ab81255c-7a4f-4528-bb77-4a3fbd8e8317": {
-        "variants": ["Jungle Rot"],
-        "status": BandStatus.ACTIVE,
-        "allmusic_url": "https://www.allmusic.com/artist/mn0000310088",
-        "bandsintown_url": "https://www.bandsintown.com/a/13217",
-        "discogs_url": "https://www.discogs.com/artist/606841",
-        "songkick_url": "https://www.songkick.com/artists/478835",
-    },
-}
+favorites: dict[str, dict[str, Any]] = {}
 
 
 async def add_favorite(

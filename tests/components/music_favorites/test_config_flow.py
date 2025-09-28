@@ -13,22 +13,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 
-def _assert_default_bands_present(result_data: Mapping[str, Any]) -> None:
-    """Assert that the default pre-configured bands are present."""
+def _assert_empty_favorites_structure(result_data: Mapping[str, Any]) -> None:
+    """Assert that the favorites structure is initialized but empty."""
     favorites = result_data["favorites"]
 
-    # Check that all three default bands are present
-    assert "f0d05c64-9959-4ae1-899b-acf51b97638c" in favorites  # Dyscarnate
-    assert "f9b57146-c5ce-41ad-adfb-ee904a4f7b19" in favorites  # Misery Index
-    assert "ab81255c-7a4f-4528-bb77-4a3fbd8e8317" in favorites  # Jungle Rot
-
-    # Verify at least one band data structure is correct (with relation URLs)
-    dyscarnate_data = favorites["f0d05c64-9959-4ae1-899b-acf51b97638c"]
-    assert dyscarnate_data["variants"] == ["Dyscarnate"]
-    assert "allmusic_url" in dyscarnate_data
-    assert "bandsintown_url" in dyscarnate_data
-    assert "discogs_url" in dyscarnate_data
-    assert "songkick_url" in dyscarnate_data
+    # Check that favorites dict exists but is empty (no default bands)
+    assert isinstance(favorites, dict)
+    assert len(favorites) == 0
 
 
 async def test_user_flow_success(hass: HomeAssistant, mock_musicbrainz_client) -> None:
@@ -54,8 +45,8 @@ async def test_user_flow_success(hass: HomeAssistant, mock_musicbrainz_client) -
     # Verify MusicBrainz connectivity was tested (called in both config flow and setup)
     assert mock_musicbrainz_client.search_artists.call_count >= 1
 
-    # Verify default bands are configured
-    _assert_default_bands_present(result["data"])
+    # Verify favorites structure is configured (but empty)
+    _assert_empty_favorites_structure(result["data"])
 
 
 async def test_user_flow_duplicate_prevented(
@@ -70,7 +61,7 @@ async def test_user_flow_duplicate_prevented(
         result1["flow_id"], user_input={}
     )
     assert result1["type"] is FlowResultType.CREATE_ENTRY
-    _assert_default_bands_present(result1["data"])
+    _assert_empty_favorites_structure(result1["data"])
 
     # Try to create second entry - should be aborted immediately (unique ID check)
     result2 = await hass.config_entries.flow.async_init(
@@ -98,8 +89,8 @@ async def test_import_flow(hass: HomeAssistant, mock_musicbrainz_client) -> None
     assert result["title"] == "Music Favorites"
     assert "favorites" in result["data"]
 
-    # Verify default bands are configured
-    _assert_default_bands_present(result["data"])
+    # Verify favorites structure is configured (but empty)
+    _assert_empty_favorites_structure(result["data"])
 
 
 async def test_import_flow_duplicate_prevented(
@@ -114,7 +105,7 @@ async def test_import_flow_duplicate_prevented(
         result1["flow_id"], user_input={}
     )
     assert result1["type"] is FlowResultType.CREATE_ENTRY
-    _assert_default_bands_present(result1["data"])
+    _assert_empty_favorites_structure(result1["data"])
 
     # Try import - should be aborted
     result2 = await hass.config_entries.flow.async_init(
