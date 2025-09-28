@@ -14,7 +14,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import BAND_STATUS_ICONS, DOMAIN, VERSION, BandStatus
-from .types import MusicFavoritesConfigEntry
+from .datatypes import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

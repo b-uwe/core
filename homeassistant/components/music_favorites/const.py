@@ -1,5 +1,7 @@
 """Constants for the Music Favorites integration."""
 
+from __future__ import annotations
+
 from datetime import timedelta
 from enum import StrEnum
 
@@ -36,4 +38,7 @@ RELATIONS_OF_INTEREST = [
 TOUR_GRACE_PERIOD = timedelta(days=2)  # Show "On Tour" 2 days after last event
 TOUR_PLANNED_PERIOD = timedelta(days=180)
 TOUR_PREVIEW_PERIOD = timedelta(days=30)  # Show "On Tour" 30 days before
-VERSION = "0.0.5"
+VERSION = "0.0.6"
+
+# Standard User-Agent for external HTTP requests (must come after VERSION)
+STANDARD_UA_FOR_FETCHES = f"Music Favorites {VERSION} (https://home-assistant.io/integrations/music_favorites)"

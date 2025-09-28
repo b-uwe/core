@@ -9,12 +9,14 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
+from .bandsintown import extract_music_events
 from .const import (
     TOUR_GRACE_PERIOD,
     TOUR_PLANNED_PERIOD,
     TOUR_PREVIEW_PERIOD,
     BandStatus,
 )
+from .ldjson import LdJsonError, fetch_and_extract_ldjson
 from .musicbrainz import MusicBrainzClient, MusicBrainzError, extract_relation_links
 
 if TYPE_CHECKING:
@@ -184,6 +186,30 @@ async def add_favorite(
 
     # Extract relation links
     relation_links = extract_relation_links(artist_data)
+
+    # Extract LD+JSON data from Bandsintown URL if available
+    bandsintown_url = relation_links.get("bandsintown_url")
+    if bandsintown_url:
+        _LOGGER.debug(
+            "Found Bandsintown URL, extracting LD+JSON data: %s", bandsintown_url
+        )
+        try:
+            ldjson_data = await fetch_and_extract_ldjson(hass, bandsintown_url)
+            _LOGGER.debug(
+                "Extracted %d LD+JSON objects from Bandsintown", len(ldjson_data)
+            )
+
+            # Parse MusicEvents for future calendar integration
+            music_events = extract_music_events(ldjson_data)
+            if music_events:
+                _LOGGER.info(
+                    "Found %d upcoming events for %s:", len(music_events), name
+                )
+
+        except LdJsonError as err:
+            _LOGGER.warning("Failed to extract LD+JSON from Bandsintown: %s", err)
+    else:
+        _LOGGER.debug("No Bandsintown URL found for artist %s", name)
 
     # Determine band status with events data
     band_status = determine_band_status(artist_data, events_data)

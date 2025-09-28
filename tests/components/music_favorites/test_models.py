@@ -1,6 +1,8 @@
 """Test Music Favorites model functions."""
 
 from datetime import datetime, timedelta
+import logging
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,6 +25,7 @@ from .fixtures.musicbrainz_responses import (
 )
 
 from tests.common import MockConfigEntry
+from tests.test_util.aiohttp import AiohttpClientMocker
 
 
 @pytest.fixture
@@ -65,9 +68,13 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
+        ) as mock_fetch_ldjson,
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
+        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
 
         # Add a new favorite (Half Me is not in the mock_config_entry)
         await add_favorite(
@@ -109,9 +116,13 @@ async def test_add_favorite_with_entity_manager(
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
+        ) as mock_fetch_ldjson,
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
+        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
 
         # Add a new favorite
         await add_favorite(
@@ -183,12 +194,16 @@ async def test_add_favorite_unicode_handling(
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
+        ) as mock_fetch_ldjson,
     ):
         mock_client = mock_client_class.return_value
         # Use Iron Maiden fixture which includes unicode aliases
         mock_client.get_artist_by_id = AsyncMock(
             return_value=IRON_MAIDEN_COMPLETE_RESPONSE
         )
+        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
 
         # Add a favorite with unicode data (using different ID not in mock_config_entry)
         await add_favorite(
@@ -375,11 +390,15 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
+        ) as mock_fetch_ldjson,
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(
             return_value=IRON_MAIDEN_COMPLETE_RESPONSE
         )
+        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
 
         await add_favorite(
             hass,
@@ -417,9 +436,13 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
+        ) as mock_fetch_ldjson,
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
+        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
 
         # Add first favorite
         await add_favorite(
@@ -745,7 +768,7 @@ def test_determine_band_status_active() -> None:
     """Test determine_band_status returns ACTIVE for active bands."""
     # Band with no end date (active)
     artist_data = {"name": "Test Band", "life-span": {"begin": "2000"}}
-    events_data = []
+    events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.ACTIVE
@@ -755,7 +778,7 @@ def test_determine_band_status_disbanded() -> None:
     """Test determine_band_status returns DISBANDED for disbanded bands."""
     # Band with end date (disbanded)
     artist_data = {"name": "Test Band", "life-span": {"begin": "2000", "end": "2020"}}
-    events_data = []
+    events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.DISBANDED
@@ -765,7 +788,7 @@ def test_determine_band_status_reformed() -> None:
     """Test determine_band_status returns REFORMED when band was previously disbanded."""
     # Band with end date but was previously disbanded
     artist_data = {"name": "Test Band", "life-span": {"begin": "2000", "end": "2020"}}
-    events_data = []
+    events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(artist_data, events_data, BandStatus.DISBANDED)
     assert status == BandStatus.REFORMED
@@ -804,7 +827,7 @@ def test_determine_band_status_tour_planned() -> None:
 def test_determine_band_status_no_life_span() -> None:
     """Test determine_band_status handles missing life-span data."""
     artist_data = {"name": "Test Band"}  # No life-span
-    events_data = []
+    events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.ACTIVE
@@ -864,7 +887,7 @@ def test_get_tour_status_no_relevant_events() -> None:
 
 def test_get_tour_status_empty_events() -> None:
     """Test get_tour_status returns None for empty events list."""
-    events_data = []
+    events_data: list[dict[str, Any]] = []
     status = get_tour_status(events_data)
     assert status is None
 
@@ -874,7 +897,7 @@ def test_get_tour_status_invalid_date_formats() -> None:
 
     current_date = datetime.now()
 
-    events_data = [
+    events_data: list[dict[str, Any]] = [
         {
             "time": (current_date + timedelta(days=15)).strftime("%Y-%m-%d")
         },  # YYYY-MM-DD
@@ -1073,3 +1096,40 @@ async def test_add_favorite_deduplicates_variants(hass: HomeAssistant) -> None:
         # Not ["Asphyx", "Asphyx", "Asphyx", "Soulburn"]
         assert stored_data["variants"] == ["Asphyx", "Soulburn"]
         assert len(stored_data["variants"]) == 2  # Explicitly verify count
+
+
+async def test_add_favorite_bandsintown_ldjson_error(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test adding favorite with Bandsintown LdJsonError (covers line 218)."""
+    # Create a test config entry
+    test_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Music Favorites",
+        data={"favorites": {}},
+    )
+    test_entry.add_to_hass(hass)
+
+    # Use Half Me fixture (has real Bandsintown URL)
+    half_me_id = "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
+
+    # Mock MusicBrainz API call with Half Me data
+    aioclient_mock.get(
+        f"https://musicbrainz.org/ws/2/artist/{half_me_id}?inc=aliases+url-rels&fmt=json",
+        json=HALF_ME_COMPLETE_RESPONSE,
+    )
+
+    # Mock Bandsintown URL to return 404 (triggering LdJsonError)
+    aioclient_mock.get(
+        "https://www.bandsintown.com/a/15548431",  # Half Me's real Bandsintown URL
+        status=404,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        await add_favorite(hass, test_entry, half_me_id)
+
+    # Verify LdJsonError handling (line 218)
+    assert "Failed to extract LD+JSON from Bandsintown" in caplog.text
+    assert "HTTP request failed with status 404" in caplog.text

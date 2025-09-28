@@ -11,8 +11,8 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 
 from .const import DOMAIN
+from .datatypes import MusicFavoritesConfigEntry
 from .models import add_favorite, remove_favorite
-from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

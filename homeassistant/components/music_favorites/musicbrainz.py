@@ -12,13 +12,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import RELATIONS_OF_INTEREST, VERSION
+from .const import RELATIONS_OF_INTEREST, STANDARD_UA_FOR_FETCHES
 
 _LOGGER = logging.getLogger(__name__)
 
 # MusicBrainz API configuration
 MUSICBRAINZ_API_URL = "https://musicbrainz.org/ws/2"
-USER_AGENT = f"Music Favorites {VERSION} (https://home-assistant.io/integrations/music_favorites)"
 
 
 class MusicBrainzError(HomeAssistantError):
@@ -67,7 +66,7 @@ class MusicBrainzClient:
         url = f"{MUSICBRAINZ_API_URL}/artist/?{urlencode(params)}"
 
         headers = {
-            "User-Agent": USER_AGENT,
+            "User-Agent": STANDARD_UA_FOR_FETCHES,
             "Accept": "application/json",
         }
 
@@ -143,7 +142,7 @@ class MusicBrainzClient:
         url = f"{MUSICBRAINZ_API_URL}/artist/{artist_id}?inc=aliases+url-rels&fmt=json"
 
         headers = {
-            "User-Agent": USER_AGENT,
+            "User-Agent": STANDARD_UA_FOR_FETCHES,
             "Accept": "application/json",
         }
 

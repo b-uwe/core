@@ -36,13 +36,13 @@
 - [x] Feed name into MusicBrainz to get an ID back
 - [x] Error handling for "not found"
 - [x] Storing the ID from the first entry found
-- [ ] Handling multiple entries by asking back with the user
+- [x] Handling multiple entries by asking back with the user
 - [x] Storing all Aliases
-- [ ] Add inc=url-rels parameter to API calls and store links with the entity data
-- [ ] Check for whether an act is still active
-- [ ] Attach BandsInTown
+- [x] Add inc=url-rels parameter to API calls and store links with the entity data
+- [x] Check for whether an act is still active
+- [x] Attach BandsInTown
 - [ ] Attach setlist.fm
-- [ ] Pull Events
+- [x] Pull Events
   - [ ] Reset entity-event-setup
 - [ ] Attribute the services used
 
@@ -58,63 +58,28 @@
 
 See architecture.md
 
-## Checkboxes to tick
+## Checkboxes to watch for changes
 ### Bronze
-- [x] `action-setup` - Service actions are registered in async_setup
-- [ ] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval *(TODO: decide polling strategy for MusicBrainz)*
-- [x] `brands` - Has branding assets available for the integration
-- [x] `common-modules` - Place common patterns in common modules *(EXEMPT: no duplicate patterns)*
-- [x] `config-flow-test-coverage` - Full test coverage for the config flow
-- [x] `config-flow` - Integration needs to be able to be set up via the UI
-- [x] `dependency-transparency` - Dependency transparency *(DONE: no external deps, raw aiohttp)*
-- [x] `docs-actions` - The documentation describes the provided service actions that can be used
-- [x] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
-- [x] `docs-installation-instructions` - The documentation provides step-by-step installation instructions for the integration, including, if needed, prerequisites
-- [x] `docs-removal-instructions` - The documentation provides removal instructions
-- [x] `entity-event-setup` - Entity events are subscribed in the correct lifecycle methods *(EXEMPT: no external events)*
-- [x] `entity-unique-id` - Entities have a unique ID
-- [x] `has-entity-name` - Entities use has_entity_name = True
-- [x] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
-- [x] `test-before-configure` - Test a connection in the config flow *(DONE: MusicBrainz connectivity test)*
-- [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly *(DONE: MusicBrainz connectivity test)*
-- [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
+- [x] `appropriate-polling` - Currently marked DONE because we don't update information yet
+- [x] `common-modules` - To be re-evaluted every once in a while
+- [x] `docs-actions` - To be re-checked should actions change
+- [x] `docs-high-level-description` - To constantly be re-checked
+- [x] `docs-installation-instructions` - To constantly be re-checked
 
 ### Silver
-- [x] `action-exceptions` - Service actions raise exceptions when encountering failures
-- [x] `config-entry-unloading` - Support config entry unloading
-- [x] `docs-configuration-parameters` - The documentation describes all integration configuration options
-- [x] `docs-installation-parameters` - The documentation describes all integration installation parameters
-- [x] `entity-unavailable` - Mark entity unavailable if appropriate *(DONE: entities handle unavailability properly)*
-- [x] `integration-owner` - Has an integration owner
-- [x] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected *(EXEMPT: local data only)*
-- [x] `parallel-updates` - Number of parallel updates is specified
-- [x] `reauthentication-flow` - Reauthentication needs to be available via the UI *(EXEMPT: no authentication)*
-- [x] `test-coverage` - Above 95% test coverage for all integration modules
+- [x] `docs-configuration-parameters` - To constantly be re-checked
+- [x] `docs-installation-parameters` - To be re-checked once we dig deep into YAML-config
+- [x] `log-when-unavailable` - To constantly be re-checked
+- [x] `test-coverage` - To constantly be re-checked
 
 ### Gold
-- [x] `devices` - The integration creates devices
-- [x] `diagnostics` - Implements diagnostics
-- [x] `discovery-update-info` - Integration uses discovery info to update network information *(EXEMPT: local data only)*
-- [x] `discovery` - Devices can be discovered *(EXEMPT: local data only)*
-- [ ] `docs-data-update` - The documentation describes how data is updated
-- [ ] `docs-examples` - The documentation provides automation examples the user can use.
-- [ ] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
-- [ ] `docs-supported-devices` - The documentation describes known supported / unsupported devices
-- [x] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
-- [ ] `docs-troubleshooting` - The documentation provides troubleshooting information
-- [x] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
-- [x] `dynamic-devices` - Devices added after integration setup *(EXEMPT: favorites managed via services)*
-- [x] `entity-category` - Entities are assigned an appropriate EntityCategory *(EXEMPT: favorites are main content)*
-- [x] `entity-device-class` - Entities use device classes where possible *(EXEMPT: no specific device class for favorites)*
-- [x] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities *(EXEMPT: all favorites should be visible)*
-- [x] `entity-translations` - Entities have translated names
-- [x] `exception-translations` - Exception messages are translatable *(EXEMPT: using standard HA exceptions)*
-- [x] `icon-translations` - Entities implement icon translations
-- [x] `reconfiguration-flow` - Integrations should have a reconfigure flow *(EXEMPT: no configuration to reconfigure)*
-- [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed *(TODO: MusicBrainz connectivity issues)*
-- [x] `stale-devices` - Stale devices are removed *(EXEMPT: all data locally managed)*
+- [x] `diagnostics` - Can forever remain checked, but we should update contents every once in a while 😅
+- [x] `docs-data-update` - To constantly be re-checked
+- [x] `docs-examples` - To constantly be re-checked
+- [x] `docs-known-limitations` - To constantly be re-checked
+- [x] `docs-troubleshooting` - To constantly be re-checked
+- [x] `docs-use-cases` - To constantly be re-checked
 
 ### Platinum
-- [x] `async-dependency` - Dependency is async *(DONE: pure aiohttp implementation)*
-- [x] `inject-websession` - The integration dependency supports passing in a websession *(DONE: uses async_get_clientsession)*
-- [x] `strict-typing` - Strict typing
+- [x] `async-dependency` -  Check every once in a while
+- [x] `inject-websession` - To be re-evaluated every once in a while

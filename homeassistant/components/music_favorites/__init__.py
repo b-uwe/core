@@ -14,9 +14,9 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
+from .datatypes import MusicFavoritesConfigEntry
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 from .services import register_services
-from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
