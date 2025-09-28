@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, VERSION
+from .const import BAND_STATUS_ICONS, DOMAIN, VERSION, BandStatus
 from .types import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -96,7 +96,9 @@ class FavoriteSensor(SensorEntity):
         # Set entity_id directly instead of _attr_entity_id
         self.entity_id = f"sensor.music_favorites_act_{safe_name}"
 
-        self._attr_icon = "mdi:guitar-electric"
+        # Set icon based on status (default to unknown if no status)
+        status = favorite_data.get("status", BandStatus.UNKNOWN)
+        self._attr_icon = BAND_STATUS_ICONS.get(status, "mdi:help-circle")
         self._attr_has_entity_name = False
 
     @property
@@ -121,9 +123,9 @@ class FavoriteSensor(SensorEntity):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
-        # For now, just return the favorite name
-        # Later: could be "next concert date" or "tour status"
-        return None
+        # Return the band status as the primary state
+        status = self._favorite_data.get("status", BandStatus.UNKNOWN)
+        return str(status)
 
 
 async def async_setup_entry(

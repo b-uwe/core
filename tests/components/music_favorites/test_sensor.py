@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from homeassistant.components.music_favorites.const import BandStatus
 from homeassistant.components.music_favorites.musicbrainz import extract_relation_links
 from homeassistant.components.music_favorites.sensor import (
     EntityManager,
@@ -39,6 +40,7 @@ def mock_config_entry_with_iron_maiden():
     favorites_data = {
         IRON_MAIDEN_COMPLETE_RESPONSE["id"]: {
             "variants": variants,
+            "status": BandStatus.ACTIVE,
             **relation_links,
         }
     }
@@ -177,7 +179,7 @@ class TestFavoriteSensor:
         assert favorite_sensor._favorite_variants[0] == "Iron Maiden"  # First variant
         assert favorite_sensor._attr_name == "Iron Maiden"
         assert favorite_sensor._attr_unique_id == f"favorite_{iron_maiden_id}"
-        assert favorite_sensor._attr_icon == "mdi:guitar-electric"
+        assert favorite_sensor._attr_icon == "mdi:guitar-electric"  # ACTIVE status icon
         assert hasattr(favorite_sensor, "_attr_has_entity_name")
 
     async def test_extra_state_attributes(self, favorite_sensor):
@@ -198,8 +200,8 @@ class TestFavoriteSensor:
 
     async def test_native_value(self, favorite_sensor):
         """Test native value property."""
-        # Currently returns None - could be extended for future features
-        assert favorite_sensor.native_value is None
+        # Returns the band status as the primary sensor state
+        assert favorite_sensor.native_value == "Active"
 
     async def test_entity_id_generation(self, mock_device_info):
         """Test entity ID generation with various artist names."""

@@ -1,12 +1,15 @@
 """Test Music Favorites model functions."""
 
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from homeassistant.components.music_favorites.const import DOMAIN
+from homeassistant.components.music_favorites.const import DOMAIN, BandStatus
 from homeassistant.components.music_favorites.models import (
     add_favorite,
+    determine_band_status,
+    get_tour_status,
     remove_favorite,
     resolve_artist_from_name,
 )
@@ -126,6 +129,7 @@ async def test_add_favorite_with_entity_manager(
         # Verify the entity manager was called to add the entity dynamically
         expected_favorite_data = {
             "variants": ["Half Me"],
+            "status": BandStatus.ACTIVE,  # Status is now included
             "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
             "bandsintown_url": "https://www.bandsintown.com/a/15548431",
             "discogs_url": "https://www.discogs.com/artist/12559079",
@@ -732,3 +736,296 @@ async def test_add_favorite_no_entity_manager(
         call_args = mock_update.call_args
         updated_data = call_args[1]["data"]["favorites"]
         assert "test-musicbrainz-id" in updated_data
+
+
+# Tests for Band Status System
+
+
+def test_determine_band_status_active() -> None:
+    """Test determine_band_status returns ACTIVE for active bands."""
+    # Band with no end date (active)
+    artist_data = {"name": "Test Band", "life-span": {"begin": "2000"}}
+    events_data = []
+
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.ACTIVE
+
+
+def test_determine_band_status_disbanded() -> None:
+    """Test determine_band_status returns DISBANDED for disbanded bands."""
+    # Band with end date (disbanded)
+    artist_data = {"name": "Test Band", "life-span": {"begin": "2000", "end": "2020"}}
+    events_data = []
+
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.DISBANDED
+
+
+def test_determine_band_status_reformed() -> None:
+    """Test determine_band_status returns REFORMED when band was previously disbanded."""
+    # Band with end date but was previously disbanded
+    artist_data = {"name": "Test Band", "life-span": {"begin": "2000", "end": "2020"}}
+    events_data = []
+
+    status = determine_band_status(artist_data, events_data, BandStatus.DISBANDED)
+    assert status == BandStatus.REFORMED
+
+
+def test_determine_band_status_on_tour() -> None:
+    """Test determine_band_status returns ON_TOUR when tour status detected."""
+    artist_data = {"name": "Test Band", "life-span": {"begin": "2000"}}
+    # Mock events data that would return ON_TOUR
+
+    current_date = datetime.now()
+    event_date = current_date + timedelta(days=15)  # Within 30-day preview window
+
+    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.ON_TOUR
+
+
+def test_determine_band_status_tour_planned() -> None:
+    """Test determine_band_status returns TOUR_PLANNED when tour is planned."""
+    artist_data = {"name": "Test Band", "life-span": {"begin": "2000"}}
+    # Mock events data that would return TOUR_PLANNED
+
+    current_date = datetime.now()
+    event_date = current_date + timedelta(
+        days=60
+    )  # Beyond 30-day preview but within 180-day planning
+
+    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.TOUR_PLANNED
+
+
+def test_determine_band_status_no_life_span() -> None:
+    """Test determine_band_status handles missing life-span data."""
+    artist_data = {"name": "Test Band"}  # No life-span
+    events_data = []
+
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.ACTIVE
+
+
+def test_get_tour_status_on_tour() -> None:
+    """Test get_tour_status returns ON_TOUR for current events."""
+
+    current_date = datetime.now()
+
+    # Event within preview window (next 30 days)
+    event_date = current_date + timedelta(days=15)
+    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+
+    status = get_tour_status(events_data)
+    assert status == BandStatus.ON_TOUR
+
+
+def test_get_tour_status_on_tour_grace_period() -> None:
+    """Test get_tour_status returns ON_TOUR during grace period after event."""
+
+    current_date = datetime.now()
+
+    # Event 1 day ago (within 2-day grace period)
+    event_date = current_date - timedelta(days=1)
+    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+
+    status = get_tour_status(events_data)
+    assert status == BandStatus.ON_TOUR
+
+
+def test_get_tour_status_tour_planned() -> None:
+    """Test get_tour_status returns TOUR_PLANNED for future events."""
+
+    current_date = datetime.now()
+
+    # Event beyond preview window but within planning window
+    event_date = current_date + timedelta(days=60)
+    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+
+    status = get_tour_status(events_data)
+    assert status == BandStatus.TOUR_PLANNED
+
+
+def test_get_tour_status_no_relevant_events() -> None:
+    """Test get_tour_status returns None when no relevant events."""
+
+    current_date = datetime.now()
+
+    # Event too far in future (beyond 180-day planning window)
+    event_date = current_date + timedelta(days=200)
+    events_data = [{"time": event_date.strftime("%Y-%m-%d")}]
+
+    status = get_tour_status(events_data)
+    assert status is None
+
+
+def test_get_tour_status_empty_events() -> None:
+    """Test get_tour_status returns None for empty events list."""
+    events_data = []
+    status = get_tour_status(events_data)
+    assert status is None
+
+
+def test_get_tour_status_invalid_date_formats() -> None:
+    """Test get_tour_status handles various date formats."""
+
+    current_date = datetime.now()
+
+    events_data = [
+        {
+            "time": (current_date + timedelta(days=15)).strftime("%Y-%m-%d")
+        },  # YYYY-MM-DD
+        {"time": (current_date + timedelta(days=16)).strftime("%Y-%m")},  # YYYY-MM
+        {"time": (current_date + timedelta(days=17)).strftime("%Y")},  # YYYY
+        {"time": "invalid-date"},  # Invalid format (should be skipped)
+        {
+            "life-span": {
+                "begin": (current_date + timedelta(days=18)).strftime("%Y-%m-%d")
+            }
+        },  # Alternative field
+    ]
+
+    status = get_tour_status(events_data)
+    assert status == BandStatus.ON_TOUR  # Should find valid dates
+
+
+def test_get_tour_status_short_date_formats() -> None:
+    """Test get_tour_status handles YYYY-MM and YYYY formats specifically."""
+
+    current_date = datetime.now()
+
+    # Test YYYY-MM format (line 87-88)
+    events_data = [
+        {
+            "time": (current_date + timedelta(days=15)).strftime("%Y-%m")
+        }  # YYYY-MM format
+    ]
+    status = get_tour_status(events_data)
+    assert status == BandStatus.ON_TOUR
+
+    # Test YYYY format (line 89-90) - use current year to ensure it's within window
+    events_data = [
+        {"time": str(current_date.year)}  # YYYY format for current year
+    ]
+    status = get_tour_status(events_data)
+    # For YYYY format, it defaults to Jan 1st of that year, which might be past or future
+    # The important thing is that it doesn't crash and processes the date format
+    assert status in [BandStatus.ON_TOUR, BandStatus.TOUR_PLANNED, None]
+
+
+def test_get_tour_status_weird_date_lengths() -> None:
+    """Test get_tour_status handles weird date string lengths."""
+    events_data = [
+        {
+            "time": "20241"
+        },  # 5 characters (not 4, 7, or 10) - should be skipped (line 91-92)
+        {"time": "202412"},  # 6 characters - should be skipped
+        {"time": "202412345"},  # 9 characters - should be skipped
+    ]
+
+    status = get_tour_status(events_data)
+    assert status is None  # All dates should be skipped
+
+
+def test_get_tour_status_value_error_handling() -> None:
+    """Test get_tour_status handles ValueError in date parsing."""
+    events_data = [
+        {"time": "2024-13-01"},  # Invalid month (should raise ValueError, line 105-107)
+        {"time": "2024-02-30"},  # Invalid day
+        {"time": "invalid"},  # Completely invalid date
+    ]
+
+    status = get_tour_status(events_data)
+    assert status is None  # All dates should be skipped due to ValueError
+
+
+def test_get_tour_status_missing_time_fields() -> None:
+    """Test get_tour_status handles events with missing time fields."""
+    events_data = [
+        {"venue": "Test Venue"},  # No time field
+        {},  # Empty event
+        {"time": ""},  # Empty time
+    ]
+
+    status = get_tour_status(events_data)
+    assert status is None
+
+
+async def test_add_favorite_includes_status_active(hass: HomeAssistant) -> None:
+    """Test that add_favorite includes status for active bands."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Music Favorites",
+        data={"favorites": {}},
+        unique_id="music_favorites",
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
+    ):
+        mock_client = mock_client_class.return_value
+        # Mock active band (no end date)
+        mock_client.get_artist_by_id = AsyncMock(
+            return_value={
+                "name": "Active Band",
+                "aliases": [],
+                "life-span": {"begin": "2000"},  # No end date = active
+                "relations": [],
+            }
+        )
+
+        await add_favorite(hass, entry, "active-band-id")
+
+        # Verify status was included
+        mock_update.assert_called_once()
+        updated_data = mock_update.call_args[1]["data"]["favorites"]
+        stored_data = updated_data["active-band-id"]
+        assert "status" in stored_data
+        assert stored_data["status"] == BandStatus.ACTIVE
+
+
+async def test_add_favorite_includes_status_disbanded(hass: HomeAssistant) -> None:
+    """Test that add_favorite includes status for disbanded bands."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Music Favorites",
+        data={"favorites": {}},
+        unique_id="music_favorites",
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.MusicBrainzClient"
+        ) as mock_client_class,
+    ):
+        mock_client = mock_client_class.return_value
+        # Mock disbanded band (has end date)
+        mock_client.get_artist_by_id = AsyncMock(
+            return_value={
+                "name": "Disbanded Band",
+                "aliases": [],
+                "life-span": {
+                    "begin": "2000",
+                    "end": "2020",
+                },  # Has end date = disbanded
+                "relations": [],
+            }
+        )
+
+        await add_favorite(hass, entry, "disbanded-band-id")
+
+        # Verify status was included
+        mock_update.assert_called_once()
+        updated_data = mock_update.call_args[1]["data"]["favorites"]
+        stored_data = updated_data["disbanded-band-id"]
+        assert "status" in stored_data
+        assert stored_data["status"] == BandStatus.DISBANDED

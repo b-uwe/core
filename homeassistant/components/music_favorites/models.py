@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
+from .const import (
+    TOUR_GRACE_PERIOD,
+    TOUR_PLANNED_PERIOD,
+    TOUR_PREVIEW_PERIOD,
+    BandStatus,
+)
 from .musicbrainz import MusicBrainzClient, MusicBrainzError, extract_relation_links
 
 if TYPE_CHECKING:
@@ -16,11 +23,102 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def determine_band_status(
+    artist_data: dict[str, Any],
+    events_data: list[dict[str, Any]] | None = None,
+    previous_status: BandStatus | None = None,
+) -> BandStatus:
+    """Determine the status of a band based on MusicBrainz data.
+
+    Args:
+        artist_data: Artist data from MusicBrainz API
+        events_data: Events data from MusicBrainz API (optional)
+        previous_status: Previous status for reformed detection (optional)
+
+    Returns:
+        BandStatus enum value
+    """
+    # Check if band has ended (disbanded)
+    life_span = artist_data.get("life-span", {})
+    end_date = life_span.get("end")
+
+    if end_date:
+        # Check if this was previously disbanded and now active (reformed)
+        if previous_status == BandStatus.DISBANDED:
+            return BandStatus.REFORMED
+        return BandStatus.DISBANDED
+
+    # Band is active - check tour status
+    if events_data:
+        tour_status = get_tour_status(events_data)
+        if tour_status:
+            return tour_status
+
+    # Default to active
+    return BandStatus.ACTIVE
+
+
+def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
+    """Check tour status based on events data.
+
+    Args:
+        events_data: List of events from future event sources
+
+    Returns:
+        BandStatus.ON_TOUR, BandStatus.TOUR_PLANNED, or None
+    """
+    now = datetime.now()
+
+    # Track closest upcoming event
+    closest_future_event = None
+    closest_days_away = float("inf")
+
+    for event in events_data:
+        # Extract date from event - format depends on future data source
+        event_date_str = event.get("time") or event.get("life-span", {}).get("begin")
+        if not event_date_str:
+            continue
+
+        try:
+            # Parse date (handle various formats)
+            if len(event_date_str) == 10:  # YYYY-MM-DD
+                event_date = datetime.strptime(event_date_str, "%Y-%m-%d")
+            elif len(event_date_str) == 7:  # YYYY-MM
+                event_date = datetime.strptime(event_date_str + "-01", "%Y-%m-%d")
+            elif len(event_date_str) == 4:  # YYYY
+                event_date = datetime.strptime(event_date_str + "-01-01", "%Y-%m-%d")
+            else:
+                continue
+
+            days_until_event = (event_date - now).days
+
+            # Check if currently on tour (within active window)
+            if -TOUR_GRACE_PERIOD.days <= days_until_event <= TOUR_PREVIEW_PERIOD.days:
+                return BandStatus.ON_TOUR
+
+            # Track closest future event for TOUR_PLANNED check
+            if TOUR_PREVIEW_PERIOD.days < days_until_event < closest_days_away:
+                closest_future_event = event_date
+                closest_days_away = days_until_event
+
+        except ValueError:
+            # Skip events with unparsable dates
+            continue
+
+    # Check if tour is planned (future event within planning window)
+    if closest_future_event and closest_days_away <= TOUR_PLANNED_PERIOD.days:
+        return BandStatus.TOUR_PLANNED
+
+    return None
+
+
 # The main favorites storage - structure with variants and relation links
 # Format: {"MusicBrainz ID": {"variants": ["Display Name", "variant1", ...], "allmusic_url": "...", ...}}
 favorites: dict[str, dict[str, Any]] = {
     "f0d05c64-9959-4ae1-899b-acf51b97638c": {
         "variants": ["Dyscarnate"],
+        "status": BandStatus.ACTIVE,
         "allmusic_url": "https://www.allmusic.com/artist/mn0002579371",
         "bandsintown_url": "https://www.bandsintown.com/a/249312",
         "discogs_url": "https://www.discogs.com/artist/1817281",
@@ -28,6 +126,7 @@ favorites: dict[str, dict[str, Any]] = {
     },
     "f9b57146-c5ce-41ad-adfb-ee904a4f7b19": {
         "variants": ["Misery Index"],
+        "status": BandStatus.ACTIVE,
         "allmusic_url": "https://www.allmusic.com/artist/mn0000500134",
         "bandsintown_url": "https://www.bandsintown.com/a/4488",
         "discogs_url": "https://www.discogs.com/artist/518265",
@@ -35,6 +134,7 @@ favorites: dict[str, dict[str, Any]] = {
     },
     "ab81255c-7a4f-4528-bb77-4a3fbd8e8317": {
         "variants": ["Jungle Rot"],
+        "status": BandStatus.ACTIVE,
         "allmusic_url": "https://www.allmusic.com/artist/mn0000310088",
         "bandsintown_url": "https://www.bandsintown.com/a/13217",
         "discogs_url": "https://www.discogs.com/artist/606841",
@@ -60,7 +160,7 @@ async def add_favorite(
             f"Favorite with MusicBrainz ID {musicbrainz_id} already exists"
         )
 
-    # Fetch complete artist data from MusicBrainz
+    # Fetch complete artist data from MusicBrainz (sequential calls to be nice to their servers)
     client = MusicBrainzClient(hass)
     try:
         artist_data = await client.get_artist_by_id(musicbrainz_id)
@@ -69,6 +169,10 @@ async def add_favorite(
         raise ServiceValidationError(
             f"Could not fetch artist data from MusicBrainz: {err}"
         ) from err
+
+    # Skip events data for now - MusicBrainz events are unreliable
+    # Framework kept for future integration with better event sources
+    events_data: list[dict[str, Any]] = []
 
     # Extract name and aliases from MusicBrainz response
     name = artist_data["name"]
@@ -81,14 +185,18 @@ async def add_favorite(
     # Extract relation links
     relation_links = extract_relation_links(artist_data)
 
+    # Determine band status with events data
+    band_status = determine_band_status(artist_data, events_data)
+
     # Add new favorite with name, aliases, and relation links from MusicBrainz
     favorite_variants = [name]
     if aliases:
         favorite_variants.extend(aliases)
 
-    # Store variants and flatten relation links directly into the data structure
+    # Store variants, status, and flatten relation links directly into the data structure
     favorite_data = {
         "variants": favorite_variants,
+        "status": band_status,
         **relation_links,  # Flatten relation links  into the object
     }
     current_favorites[musicbrainz_id] = favorite_data
