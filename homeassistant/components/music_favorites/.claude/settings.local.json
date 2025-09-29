@@ -16,7 +16,8 @@
       "Bash(python3:*)",
       "Bash(curl:*)",
       "WebFetch(domain:musicbrainz.org)",
-      "WebFetch(domain:www.bandsintown.com)"
+      "WebFetch(domain:www.bandsintown.com)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +24,56 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def extract_pure_event_data(
+    events_data: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Extract pure date and time data from Bandsintown events.
+
+    Converts Bandsintown datetime strings into separated date and time components
+    for clean, source-agnostic storage. This approach supports multiple event
+    sources and eliminates timezone complexity.
+
+    Args:
+        events_data: List of event dictionaries from Bandsintown
+
+    Returns:
+        List of event dictionaries with pure date/time data
+    """
+    converted_events = []
+
+    for event in events_data:
+        converted_event = event.copy()
+
+        # Extract start_date if present
+        start_date_str = event.get("start_date")
+        if start_date_str and len(start_date_str) == 19 and "T" in start_date_str:
+            try:
+                # Parse naive datetime from Bandsintown (venue local time)
+                naive_start = datetime.strptime(start_date_str, "%Y-%m-%dT%H:%M:%S")
+                # Store pure date and time components
+                converted_event["event_date"] = naive_start.strftime("%Y-%m-%d")
+                converted_event["venue_time"] = naive_start.strftime("%H:%M:%S")
+                converted_event["venue_time_display"] = naive_start.strftime(
+                    "%-I:%M %p"
+                )
+                # Remove original datetime field
+                del converted_event["start_date"]
+            except ValueError:
+                # Keep original if parsing fails
+                pass
+
+        # Handle end_date if present (usually just date for Bandsintown)
+        end_date_str = event.get("end_date")
+        if end_date_str:
+            # Most Bandsintown end dates are date-only, just remove them
+            # We'll use event_date for single-day events
+            del converted_event["end_date"]
+
+        converted_events.append(converted_event)
+
+    return converted_events
 
 
 def determine_band_status(
@@ -70,31 +120,22 @@ def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
     Returns:
         BandStatus.ON_TOUR, BandStatus.TOUR_PLANNED, or None
     """
-    now = datetime.now()
+    today = date.today()
 
     # Track closest upcoming event
     closest_future_event = None
     closest_days_away = float("inf")
 
     for event in events_data:
-        # Extract date from event
-        # Bandsintown format: event.get("start_date")
-        event_date_str = (
-            event.get("start_date")  # Bandsintown format
-        )
+        # Extract date from event (now using pure date format)
+        event_date_str = event.get("event_date")
         if not event_date_str:
             continue
 
         try:
-            # Parse date (handle various formats)
-            if (
-                len(event_date_str) == 19 and "T" in event_date_str
-            ):  # ISO datetime: YYYY-MM-DDTHH:MM:SS
-                event_date = datetime.strptime(event_date_str, "%Y-%m-%dT%H:%M:%S")
-            else:
-                continue
-
-            days_until_event = (event_date - now).days
+            # Parse event date - simple date format: "2025-11-25"
+            event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
+            days_until_event = (event_date - today).days
 
             # Check if currently on tour (within active window)
             if -TOUR_GRACE_PERIOD.days <= days_until_event <= TOUR_PREVIEW_PERIOD.days:
@@ -105,7 +146,7 @@ def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
                 closest_future_event = event_date
                 closest_days_away = days_until_event
 
-        except ValueError:
+        except (ValueError, TypeError):
             # Skip events with unparsable dates
             continue
 
@@ -170,21 +211,16 @@ async def add_favorite(
         )
         try:
             ldjson_data = await fetch_and_extract_ldjson(hass, bandsintown_url)
-            _LOGGER.debug(
-                "Extracted %d LD+JSON objects from Bandsintown", len(ldjson_data)
-            )
 
             # Parse MusicEvents and use them for status determination
             music_events = extract_music_events(ldjson_data)
             if music_events:
-                _LOGGER.info(
-                    "Found %d events for %s - will use for status determination",
-                    len(music_events),
-                    name,
-                )
-                events_data = (
-                    music_events  # Use Bandsintown events for status determination
-                )
+                # Extract pure date and time data for storage
+                events_data = extract_pure_event_data(music_events)
+
+            _LOGGER.debug(
+                "Extracted %d LD+JSON objects from Bandsintown", len(ldjson_data)
+            )
 
         except LdJsonError as err:
             _LOGGER.warning("Failed to extract LD+JSON from Bandsintown: %s", err)
@@ -205,10 +241,11 @@ async def add_favorite(
                 variants_set.add(alias)
                 favorite_variants.append(alias)
 
-    # Store variants, status, and flatten relation links directly into the data structure
+    # Store variants, status, events, and flatten relation links directly into the data structure
     favorite_data = {
         "variants": favorite_variants,
         "status": band_status,
+        "events": events_data,  # Store events data with the act
         **relation_links,  # Flatten relation links  into the object
     }
     current_favorites[musicbrainz_id] = favorite_data

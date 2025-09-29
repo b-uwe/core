@@ -48,6 +48,8 @@ class MusicFavoritesConversationEntity(ConversationEntity):
         """Initialize the Music Favorites conversation entity."""
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_conversation"
+        # Set entity_id explicitly to ensure it matches expected conversation agent ID
+        self.entity_id = "conversation.music_favorites_assistant"
         _LOGGER.debug("Created Music Favorites conversation entity")
 
     @property

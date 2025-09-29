@@ -1,6 +1,7 @@
 """Test Music Favorites model functions."""
 
 from datetime import datetime, timedelta
+import json
 import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,6 +12,7 @@ from homeassistant.components.music_favorites.const import DOMAIN, BandStatus
 from homeassistant.components.music_favorites.models import (
     add_favorite,
     determine_band_status,
+    extract_pure_event_data,
     get_tour_status,
     remove_favorite,
     resolve_artist_from_name,
@@ -19,6 +21,7 @@ from homeassistant.components.music_favorites.musicbrainz import MusicBrainzErro
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
+from .fixtures.bandsintown_responses import VULVODYNIA_EVENTS_LDJSON
 from .fixtures.musicbrainz_responses import (
     HALF_ME_COMPLETE_RESPONSE,
     IRON_MAIDEN_COMPLETE_RESPONSE,
@@ -141,6 +144,7 @@ async def test_add_favorite_with_entity_manager(
         expected_favorite_data = {
             "variants": ["Half Me"],
             "status": BandStatus.ACTIVE,  # Status is now included
+            "events": [],  # Empty events list since LD+JSON returned empty
             "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
             "bandsintown_url": "https://www.bandsintown.com/a/15548431",
             "discogs_url": "https://www.discogs.com/artist/12559079",
@@ -802,7 +806,8 @@ def test_determine_band_status_on_tour() -> None:
     current_date = datetime.now()
     event_date = current_date + timedelta(days=15)  # Within 30-day preview window
 
-    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
+    # Use processed event format with event_date field
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.ON_TOUR
@@ -818,7 +823,8 @@ def test_determine_band_status_tour_planned() -> None:
         days=60
     )  # Beyond 30-day preview but within 180-day planning
 
-    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
+    # Use processed event format with event_date field
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = determine_band_status(artist_data, events_data)
     assert status == BandStatus.TOUR_PLANNED
@@ -840,7 +846,8 @@ def test_get_tour_status_on_tour() -> None:
 
     # Event within preview window (next 30 days)
     event_date = current_date + timedelta(days=15)
-    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
+    # Use processed event format with event_date field
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR
@@ -853,7 +860,8 @@ def test_get_tour_status_on_tour_grace_period() -> None:
 
     # Event 1 day ago (within 2-day grace period)
     event_date = current_date - timedelta(days=1)
-    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
+    # Use processed event format with event_date field
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR
@@ -866,7 +874,8 @@ def test_get_tour_status_tour_planned() -> None:
 
     # Event beyond preview window but within planning window
     event_date = current_date + timedelta(days=60)
-    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
+    # Use processed event format with event_date field
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = get_tour_status(events_data)
     assert status == BandStatus.TOUR_PLANNED
@@ -879,7 +888,8 @@ def test_get_tour_status_no_relevant_events() -> None:
 
     # Event too far in future (beyond 180-day planning window)
     event_date = current_date + timedelta(days=200)
-    events_data = [{"start_date": event_date.strftime("%Y-%m-%dT%H:%M:%S")}]
+    # Use processed event format with event_date field
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = get_tour_status(events_data)
     assert status is None
@@ -893,17 +903,15 @@ def test_get_tour_status_empty_events() -> None:
 
 
 def test_get_tour_status_bandsintown_with_invalid_dates() -> None:
-    """Test get_tour_status handles Bandsintown format with some invalid dates."""
+    """Test get_tour_status handles processed events with some invalid dates."""
 
     current_date = datetime.now()
 
     events_data: list[dict[str, Any]] = [
         {
-            "start_date": (current_date + timedelta(days=15)).strftime(
-                "%Y-%m-%dT%H:%M:%S"
-            )
-        },  # ISO datetime format (Bandsintown format)
-        {"start_date": "invalid-date"},  # Invalid format (should be skipped)
+            "event_date": (current_date + timedelta(days=15)).strftime("%Y-%m-%d")
+        },  # Valid processed event format
+        {"event_date": "invalid-date"},  # Invalid format (should be skipped)
     ]
 
     status = get_tour_status(events_data)
@@ -911,21 +919,18 @@ def test_get_tour_status_bandsintown_with_invalid_dates() -> None:
 
 
 def test_get_tour_status_bandsintown_format() -> None:
-    """Test get_tour_status handles Bandsintown ISO datetime format."""
+    """Test get_tour_status handles processed event format."""
 
     current_date = datetime.now()
 
-    # Test Bandsintown ISO datetime format
+    # Test processed event format
     events_data = [
         {
-            "start_date": (current_date + timedelta(days=15)).strftime(
-                "%Y-%m-%dT%H:%M:%S"
-            )
-        }  # ISO datetime format (Bandsintown format)
+            "event_date": (current_date + timedelta(days=15)).strftime("%Y-%m-%d")
+        }  # Processed event format with event_date field
     ]
     status = get_tour_status(events_data)
     assert status == BandStatus.ON_TOUR
-    assert status in [BandStatus.ON_TOUR, BandStatus.TOUR_PLANNED, None]
 
 
 def test_get_tour_status_weird_date_lengths() -> None:
@@ -1122,3 +1127,313 @@ async def test_add_favorite_bandsintown_ldjson_error(
     # Verify LdJsonError handling (line 218)
     assert "Failed to extract LD+JSON from Bandsintown" in caplog.text
     assert "HTTP request failed with status 404" in caplog.text
+
+
+# Tests for extract_pure_event_data function (lines 44-74)
+
+
+def test_extract_pure_event_data_bandsintown_format() -> None:
+    """Test extract_pure_event_data with real Bandsintown event data."""
+    # Create raw events in the format that extract_music_events would produce
+    raw_events = [
+        {
+            "text": VULVODYNIA_EVENTS_LDJSON[0]["name"],
+            "start_date": VULVODYNIA_EVENTS_LDJSON[0]["startDate"],
+            "end_date": VULVODYNIA_EVENTS_LDJSON[0]["endDate"],
+            "url": VULVODYNIA_EVENTS_LDJSON[0]["url"],
+            "location": VULVODYNIA_EVENTS_LDJSON[0]["location"]["name"],
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # Verify date/time conversion from fixture data
+    assert event["event_date"] == "2025-11-25"
+    assert event["venue_time"] == "18:00:00"
+    assert event["venue_time_display"] == "6:00 PM"
+
+    # Verify original fields are preserved
+    assert event["text"] == VULVODYNIA_EVENTS_LDJSON[0]["name"]
+    assert event["url"] == VULVODYNIA_EVENTS_LDJSON[0]["url"]
+    assert event["location"] == VULVODYNIA_EVENTS_LDJSON[0]["location"]["name"]
+
+    # Verify datetime fields are removed
+    assert "start_date" not in event
+    assert "end_date" not in event
+
+
+def test_extract_pure_event_data_multiple_events() -> None:
+    """Test extract_pure_event_data processes multiple events correctly."""
+    # Use both Vulvodynia events from fixtures
+    raw_events = [
+        {
+            "text": VULVODYNIA_EVENTS_LDJSON[0]["name"],
+            "start_date": VULVODYNIA_EVENTS_LDJSON[0]["startDate"],
+            "end_date": VULVODYNIA_EVENTS_LDJSON[0]["endDate"],
+        },
+        {
+            "text": VULVODYNIA_EVENTS_LDJSON[1]["name"],
+            "start_date": VULVODYNIA_EVENTS_LDJSON[1]["startDate"],
+            "end_date": VULVODYNIA_EVENTS_LDJSON[1]["endDate"],
+        },
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 2
+
+    # First event (2025-11-25T18:00:00)
+    assert result[0]["event_date"] == "2025-11-25"
+    assert result[0]["venue_time"] == "18:00:00"
+    assert result[0]["venue_time_display"] == "6:00 PM"
+
+    # Second event (2025-11-28T17:30:00)
+    assert result[1]["event_date"] == "2025-11-28"
+    assert result[1]["venue_time"] == "17:30:00"
+    assert result[1]["venue_time_display"] == "5:30 PM"
+
+
+def test_extract_pure_event_data_strptime_value_error() -> None:
+    """Test extract_pure_event_data handles strptime ValueError gracefully."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "start_date": "2025-13-99T25:99:99",  # Valid format but invalid date - triggers ValueError
+            "end_date": "2025-11-25",
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # Original invalid start_date should be preserved (ValueError caught)
+    assert event["start_date"] == "2025-13-99T25:99:99"
+    assert event["text"] == "Test Event"
+
+    # end_date should still be removed
+    assert "end_date" not in event
+
+
+def test_extract_pure_event_data_invalid_start_date() -> None:
+    """Test extract_pure_event_data handles invalid start_date gracefully."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "start_date": "invalid-datetime",  # Wrong format, won't be processed
+            "end_date": "2025-11-25",
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # Original invalid start_date should be preserved
+    assert event["start_date"] == "invalid-datetime"
+    assert event["text"] == "Test Event"
+
+    # end_date should still be removed
+    assert "end_date" not in event
+
+
+def test_extract_pure_event_data_wrong_length_start_date() -> None:
+    """Test extract_pure_event_data skips processing for wrong length start_date."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "start_date": "2025-11-25",  # Wrong length (10 chars instead of 19)
+            "end_date": "2025-11-25",
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # start_date should be preserved as-is (not processed)
+    assert event["start_date"] == "2025-11-25"
+    assert "event_date" not in event
+    assert "venue_time" not in event
+
+    # end_date should still be removed
+    assert "end_date" not in event
+
+
+def test_extract_pure_event_data_no_t_separator() -> None:
+    """Test extract_pure_event_data skips processing when no T separator."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "start_date": "2025-11-25 18:00:00",  # Wrong format (space instead of T)
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # start_date should be preserved as-is (not processed)
+    assert event["start_date"] == "2025-11-25 18:00:00"
+    assert "event_date" not in event
+
+
+def test_extract_pure_event_data_no_start_date() -> None:
+    """Test extract_pure_event_data handles events with no start_date."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "end_date": "2025-11-25",
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # Only text should remain
+    assert event["text"] == "Test Event"
+    assert "start_date" not in event
+    assert "end_date" not in event
+    assert "event_date" not in event
+
+
+def test_extract_pure_event_data_empty_start_date() -> None:
+    """Test extract_pure_event_data handles empty start_date."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "start_date": "",  # Empty string
+            "end_date": "2025-11-25",
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # Empty start_date should be preserved
+    assert event["start_date"] == ""
+    assert "event_date" not in event
+    assert "end_date" not in event
+
+
+def test_extract_pure_event_data_no_end_date() -> None:
+    """Test extract_pure_event_data handles events with no end_date."""
+    raw_events = [
+        {
+            "text": "Test Event",
+            "start_date": VULVODYNIA_EVENTS_LDJSON[0]["startDate"],  # Use fixture data
+        }
+    ]
+
+    result = extract_pure_event_data(raw_events)
+
+    assert len(result) == 1
+    event = result[0]
+
+    # Should process start_date normally
+    assert event["event_date"] == "2025-11-25"
+    assert event["venue_time"] == "18:00:00"
+    assert "start_date" not in event
+    assert "end_date" not in event
+
+
+def test_extract_pure_event_data_empty_list() -> None:
+    """Test extract_pure_event_data handles empty events list."""
+    result = extract_pure_event_data([])
+    assert result == []
+
+
+# Tests for get_tour_status error handling (lines 149-151)
+
+
+def test_get_tour_status_value_error_in_date_parsing() -> None:
+    """Test get_tour_status handles ValueError in date parsing."""
+    events_data = [
+        {"event_date": "invalid-date-format"},  # Will cause ValueError
+        {"event_date": "2025-11-25"},  # Valid date should still work
+    ]
+
+    # Should not crash and should find the valid date
+    status = get_tour_status(events_data)
+    # The 2025-11-25 date is far in future, so should return None or TOUR_PLANNED
+    assert status in [BandStatus.TOUR_PLANNED, None]
+
+
+def test_get_tour_status_type_error_in_date_parsing() -> None:
+    """Test get_tour_status handles TypeError in date parsing."""
+    events_data = [
+        {"event_date": None},  # Will cause TypeError
+        {"event_date": 123},  # Will also cause TypeError
+    ]
+
+    # Should not crash and should return None (no valid dates)
+    status = get_tour_status(events_data)
+    assert status is None
+
+
+# Test for add_favorite with LD+JSON events (line 219)
+
+
+async def test_add_favorite_with_ldjson_events(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Test add_favorite processes LD+JSON events correctly (line 219)."""
+    test_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Music Favorites",
+        data={"favorites": {}},
+        unique_id="music_favorites",
+    )
+    test_entry.add_to_hass(hass)
+
+    half_me_id = "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
+
+    # Mock MusicBrainz API call
+    aioclient_mock.get(
+        f"https://musicbrainz.org/ws/2/artist/{half_me_id}?inc=aliases+url-rels&fmt=json",
+        json=HALF_ME_COMPLETE_RESPONSE,
+    )
+
+    # Mock Bandsintown URL to return LD+JSON with events from fixtures
+    aioclient_mock.get(
+        "https://www.bandsintown.com/a/15548431",
+        text=f"""
+        <html>
+        <head>
+        <script type="application/ld+json">
+        {json.dumps(VULVODYNIA_EVENTS_LDJSON[0])}
+        </script>
+        </head>
+        </html>
+        """,
+    )
+
+    await add_favorite(hass, test_entry, half_me_id)
+
+    # Verify the favorite was added with processed events
+    updated_entry = hass.config_entries.async_get_entry(test_entry.entry_id)
+    favorites = updated_entry.data["favorites"]
+
+    assert half_me_id in favorites
+    favorite_data = favorites[half_me_id]
+
+    # Should have events data processed through extract_pure_event_data
+    assert "events" in favorite_data
+    assert len(favorite_data["events"]) == 1
+
+    # Event should be processed (start_date converted to event_date)
+    event = favorite_data["events"][0]
+    assert event["event_date"] == "2025-11-25"  # From VULVODYNIA_EVENTS_LDJSON[0]
+    assert event["venue_time"] == "18:00:00"
+    assert "start_date" not in event

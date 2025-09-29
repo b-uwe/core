@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 _LOGGER.debug("Music Favorites module imported!")
 
 
-_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CONVERSATION]
+_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CONVERSATION, Platform.CALENDAR]
 
 # Make this integration be accessible from both UI as well as YAML
 # TO DO: Long term goal would be make YAML imported config immutable
