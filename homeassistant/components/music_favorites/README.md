@@ -155,6 +155,8 @@ The Music Favorites integration provides comprehensive functionality for managin
 
 #### **Entity Creation**
 - **Sensor Entities**: Each favorite automatically becomes a Home Assistant sensor entity
+- **Calendar Entity**: Concert calendar showing upcoming events for all favorite artists
+- **Next Shows Display**: Calendar includes "next_shows" attribute with upcoming concert list
 - **Unique Identification**: Entities use stable, unique IDs for reliable automation
 - **Attribute Exposure**: Artist metadata exposed as entity attributes
 - **State Management**: Entity states available for automation triggers
@@ -227,6 +229,10 @@ The Music Favorites integration provides comprehensive functionality for managin
 
 ## Entities
 
+The Music Favorites integration creates multiple types of entities:
+
+### **Artist Sensor Entities**
+
 Each favorite artist becomes a sensor entity with the following properties:
 
 - **Entity ID**: `sensor.music_favorites_[artist_name]`
@@ -237,7 +243,7 @@ Each favorite artist becomes a sensor entity with the following properties:
   - `friendly_name`: Display name for the artist
   - `icon`: Entity icon (mdi:account-music)
 
-### Example Entity
+#### Example Artist Entity
 
 ```
 Entity: sensor.music_favorites_misery_index
@@ -247,6 +253,46 @@ Attributes:
   variants: []
   friendly_name: "Misery Index"
   icon: mdi:account-music
+```
+
+### **Concert Calendar Entity**
+
+The integration also creates a calendar entity that displays upcoming concerts:
+
+- **Entity ID**: `calendar.concert_calendar`
+- **State**: Current calendar state (active/inactive)
+- **Attributes**:
+  - `next_shows`: Formatted list of next 10 upcoming concerts
+  - `friendly_name`: "Concert Calendar"
+
+#### Example Calendar Entity
+
+```
+Entity: calendar.concert_calendar
+State: off
+Attributes:
+  next_shows: "1. Artist Name @ Venue Name - Jan 15, 2025 8:00 PM // 2. Another Artist @ Another Venue - Jan 20, 2025 7:30 PM // ..."
+  friendly_name: "Concert Calendar"
+```
+
+#### Using the Next Shows Attribute
+
+You can access the upcoming shows list in templates and automations:
+
+```yaml
+# Template example
+{{ state_attr('calendar.concert_calendar', 'next_shows') }}
+
+# Automation example
+- alias: "Display Next Shows"
+  trigger:
+    platform: state
+    entity_id: calendar.concert_calendar
+    attribute: next_shows
+  action:
+    service: notify.mobile_app
+    data:
+      message: "Upcoming concerts: {{ state_attr('calendar.concert_calendar', 'next_shows') }}"
 ```
 
 ## Automation Examples
