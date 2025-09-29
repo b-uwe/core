@@ -31,7 +31,16 @@ async def test_setup_entry_success(hass: HomeAssistant) -> None:
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="Music Favorites",
-            data={"favorites": {"test-id": ["Test Band"]}},
+            data={
+                "favorites": {
+                    "test-id": {
+                        "variants": ["Test Band"],
+                        "status": "Active",
+                        "events": [],
+                    }
+                },
+                "distance_filter": 100,
+            },
             unique_id="music_favorites_unique_id",
         )
         entry.add_to_hass(hass)
@@ -58,7 +67,12 @@ async def test_unload_entry_success(
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Music Favorites",
-        data={"favorites": {"test-id": ["Test Band"]}},
+        data={
+            "favorites": {
+                "test-id": {"variants": ["Test Band"], "status": "Active", "events": []}
+            },
+            "distance_filter": 100,
+        },
         unique_id="music_favorites_unique_id",
     )
     entry.add_to_hass(hass)
@@ -123,7 +137,12 @@ async def test_runtime_data_structure(
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Music Favorites",
-        data={"favorites": {"test-id": ["Test Band"]}},
+        data={
+            "favorites": {
+                "test-id": {"variants": ["Test Band"], "status": "Active", "events": []}
+            },
+            "distance_filter": 100,
+        },
         unique_id="music_favorites_unique_id",
     )
     entry.add_to_hass(hass)
@@ -137,10 +156,14 @@ async def test_runtime_data_structure(
     assert isinstance(entry.runtime_data, dict)
     assert "update_interval" in entry.runtime_data
     assert "musicbrainz_client" in entry.runtime_data
+    assert "filtered_calendar_events" in entry.runtime_data
 
     # Verify it's actually a timedelta
     assert isinstance(entry.runtime_data["update_interval"], timedelta)
     assert entry.runtime_data["update_interval"] == timedelta(hours=6)
+
+    # Verify filtered events cache is a list
+    assert isinstance(entry.runtime_data["filtered_calendar_events"], list)
 
 
 async def test_init_flow_unknown_flow_exception(hass: HomeAssistant) -> None:
@@ -162,7 +185,16 @@ async def test_setup_entry_musicbrainz_error(hass: HomeAssistant) -> None:
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="Music Favorites",
-            data={"favorites": {"test-id": ["Test Band"]}},
+            data={
+                "favorites": {
+                    "test-id": {
+                        "variants": ["Test Band"],
+                        "status": "Active",
+                        "events": [],
+                    }
+                },
+                "distance_filter": 100,
+            },
             unique_id="music_favorites_unique_id",
         )
         entry.add_to_hass(hass)

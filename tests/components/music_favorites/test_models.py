@@ -74,6 +74,9 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
         patch(
             "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
         ) as mock_fetch_ldjson,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
@@ -122,6 +125,9 @@ async def test_add_favorite_with_entity_manager(
         patch(
             "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
         ) as mock_fetch_ldjson,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
@@ -201,6 +207,9 @@ async def test_add_favorite_unicode_handling(
         patch(
             "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
         ) as mock_fetch_ldjson,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         # Use Iron Maiden fixture which includes unicode aliases
@@ -244,6 +253,9 @@ async def test_remove_favorite_success(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         # Remove an existing favorite by MusicBrainz ID
         await remove_favorite(
@@ -287,6 +299,9 @@ async def test_remove_favorite_case_insensitive(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         # Remove using MusicBrainz ID (case doesn't matter for IDs)
         await remove_favorite(
@@ -317,6 +332,9 @@ async def test_remove_favorite_unicode(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         # Remove the unicode favorite by MusicBrainz ID
         await remove_favorite(
@@ -362,6 +380,9 @@ async def test_remove_favorite_no_entity_in_registry(
             return_value=mock_entity_registry,
         ),
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         # Remove should still succeed even if entity isn't in registry
         await remove_favorite(
@@ -397,6 +418,9 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
         patch(
             "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
         ) as mock_fetch_ldjson,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(
@@ -443,6 +467,9 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
         patch(
             "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
         ) as mock_fetch_ldjson,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
@@ -745,6 +772,9 @@ async def test_add_favorite_no_entity_manager(
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         # Mock successful MusicBrainz response
         mock_client = mock_client_class.return_value
@@ -986,6 +1016,9 @@ async def test_add_favorite_includes_status_active(hass: HomeAssistant) -> None:
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         # Mock active band (no end date)
@@ -1023,6 +1056,9 @@ async def test_add_favorite_includes_status_disbanded(hass: HomeAssistant) -> No
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         # Mock disbanded band (has end date)
@@ -1063,6 +1099,9 @@ async def test_add_favorite_deduplicates_variants(hass: HomeAssistant) -> None:
         patch(
             "homeassistant.components.music_favorites.models.MusicBrainzClient"
         ) as mock_client_class,
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
     ):
         mock_client = mock_client_class.return_value
         # Mock artist where name "Asphyx" appears in both name and aliases (common MusicBrainz case)
@@ -1121,7 +1160,12 @@ async def test_add_favorite_bandsintown_ldjson_error(
         status=404,
     )
 
-    with caplog.at_level(logging.WARNING):
+    with (
+        caplog.at_level(logging.WARNING),
+        patch(
+            "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+        ),
+    ):
         await add_favorite(hass, test_entry, half_me_id)
 
     # Verify LdJsonError handling (line 218)
@@ -1419,7 +1463,10 @@ async def test_add_favorite_with_ldjson_events(
         """,
     )
 
-    await add_favorite(hass, test_entry, half_me_id)
+    with patch(
+        "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
+    ) as _:
+        await add_favorite(hass, test_entry, half_me_id)
 
     # Verify the favorite was added with processed events
     updated_entry = hass.config_entries.async_get_entry(test_entry.entry_id)

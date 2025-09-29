@@ -10,6 +10,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
 from .bandsintown import extract_music_events
+from .calendar_utils import update_filtered_calendar_cache
 from .const import (
     TOUR_GRACE_PERIOD,
     TOUR_PLANNED_PERIOD,
@@ -274,6 +275,9 @@ async def add_favorite(
 
     _LOGGER.info("Successfully added favorite: %s", name)
 
+    # Update filtered calendar cache after adding favorite
+    await update_filtered_calendar_cache(hass, entry)
+
 
 async def remove_favorite(
     hass: HomeAssistant,
@@ -316,6 +320,9 @@ async def remove_favorite(
         entity_registry.async_remove(entity_id)
 
     _LOGGER.info("Successfully removed favorite: %s", favorite_name)
+
+    # Update filtered calendar cache after removing favorite
+    await update_filtered_calendar_cache(hass, entry)
 
 
 async def resolve_artist_from_name(

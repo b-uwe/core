@@ -13,6 +13,7 @@ from homeassistant.data_entry_flow import UnknownFlow
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 
+from .calendar_utils import update_filtered_calendar_cache
 from .const import DOMAIN
 from .datatypes import MusicFavoritesConfigEntry
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
@@ -24,7 +25,12 @@ _LOGGER = logging.getLogger(__name__)
 _LOGGER.debug("Music Favorites module imported!")
 
 
-_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CONVERSATION, Platform.CALENDAR]
+_PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.CONVERSATION,
+    Platform.CALENDAR,
+    Platform.SELECT,
+]
 
 # Make this integration be accessible from both UI as well as YAML
 # TO DO: Long term goal would be make YAML imported config immutable
@@ -100,9 +106,13 @@ async def async_setup_entry(
     entry.runtime_data = {
         "update_interval": timedelta(hours=6),
         "musicbrainz_client": client,
+        "filtered_calendar_events": [],  # Cache for distance-filtered events
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+
+    # Initialize filtered calendar cache after platforms are set up
+    await update_filtered_calendar_cache(hass, entry)
 
     return True
 

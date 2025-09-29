@@ -10,7 +10,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
-from .const import DOMAIN
+from .const import DEFAULT_MAX_DISTANCE_KM, DOMAIN
 from .models import favorites
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 
@@ -126,5 +126,9 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
         _LOGGER.debug("Creating default Config Entry for first time use")
 
         return self.async_create_entry(
-            title="Music Favorites", data={"favorites": favorites}
+            title="Music Favorites",
+            data={
+                "favorites": favorites,
+                "distance_filter": DEFAULT_MAX_DISTANCE_KM,
+            },
         )

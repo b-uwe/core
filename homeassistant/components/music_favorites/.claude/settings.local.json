@@ -17,7 +17,8 @@
       "Bash(curl:*)",
       "WebFetch(domain:musicbrainz.org)",
       "WebFetch(domain:www.bandsintown.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []

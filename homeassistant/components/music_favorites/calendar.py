@@ -13,12 +13,12 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, VERSION
+from .calendar_utils import create_calendar_device_info
 from .datatypes import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
-# That's kinda bullshit because the calendar doesn't fetch anything. But...
+# That's kinda bullshit because the calendar doesn't fetch anything. But... 🤷
 PARALLEL_UPDATES = 1
 
 
@@ -30,15 +30,8 @@ async def async_setup_entry(
     """Set up Music Favorites calendar from a config entry."""
     _LOGGER.debug("Setting up Music Favorites calendar entity")
 
-    # Create device info for calendar (separate from acts device)
-    device_info = DeviceInfo(
-        identifiers={(DOMAIN, f"{entry.entry_id}_calendar")},
-        name="Concert Calendar",
-        manufacturer="Music Favorites Integration",
-        model="Event Calendar",
-        sw_version=VERSION,
-        configuration_url=f"homeassistant://config/integrations/integration/{DOMAIN}",
-    )
+    # Create device info for calendar (shared with select entities)
+    device_info = create_calendar_device_info(entry.entry_id)
 
     # Create the calendar entity
     calendar_entity = MusicFavoritesCalendar(entry, device_info)
@@ -67,10 +60,19 @@ class MusicFavoritesCalendar(CalendarEntity):
         """Entity has been added to hass."""
         await super().async_added_to_hass()
 
+        # Register this calendar entity in runtime_data for easy access
+        self._entry.runtime_data["calendar_entity"] = self
+
         # Listen for config entry updates to refresh calendar when favorites change
         self.async_on_remove(
             self._entry.add_update_listener(self._config_entry_updated)
         )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Entity will be removed from hass."""
+        # Unregister calendar entity from runtime_data
+        self._entry.runtime_data.pop("calendar_entity", None)
+        await super().async_will_remove_from_hass()
 
     async def _config_entry_updated(
         self, hass: HomeAssistant, entry: MusicFavoritesConfigEntry
@@ -80,26 +82,14 @@ class MusicFavoritesCalendar(CalendarEntity):
         self.async_write_ha_state()
 
     def _get_all_events(self) -> list[dict[str, Any]]:
-        """Get all events from all favorite acts.
+        """Get all filtered events from runtime_data cache.
 
         Returns:
-            List of raw event dictionaries from Bandsintown data
+            List of raw event dictionaries, pre-filtered by distance
         """
-        all_events = []
-        favorites_data = self._entry.data.get("favorites", {})
-
-        for musicbrainz_id, favorite_data in favorites_data.items():
-            events_data = favorite_data.get("events", [])
-            variants = favorite_data.get("variants", [])
-            performer_name = variants[0] if variants else "Unknown Artist"
-
-            # Add performer info to each event for calendar display
-            for event in events_data:
-                event_with_performer = event.copy()
-                event_with_performer["performer_name"] = performer_name
-                event_with_performer["musicbrainz_id"] = musicbrainz_id
-                all_events.append(event_with_performer)
-        return all_events
+        # Return the pre-filtered events from cache
+        cached_events = self._entry.runtime_data.get("filtered_calendar_events", [])
+        return cached_events if isinstance(cached_events, list) else []
 
     def _convert_to_calendar_event(
         self, event_data: dict[str, Any]
