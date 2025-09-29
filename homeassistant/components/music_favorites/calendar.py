@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import datetime
 import logging
 from typing import Any
@@ -214,3 +215,86 @@ class MusicFavoritesCalendar(CalendarEntity):
         )
 
         return calendar_events
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Return extra state attributes."""
+        return {"next_shows": self._generate_next_shows_text()}
+
+    def _generate_next_shows_text(self) -> str:
+        """Generate text listing the next 10 upcoming shows.
+
+        Returns:
+            Formatted text string with next 10 shows
+        """
+        now = dt_util.now()
+        upcoming_events = []
+
+        # Get all events and filter for upcoming ones
+        for event_data in self._get_all_events():
+            try:
+                event_date_str = event_data.get("event_date")
+                if not event_date_str:
+                    continue
+
+                # Parse event date and convert to datetime for comparison
+                event_date = datetime.datetime.strptime(
+                    event_date_str, "%Y-%m-%d"
+                ).date()
+                event_datetime = datetime.datetime.combine(
+                    event_date, datetime.time.min, tzinfo=now.tzinfo
+                )
+
+                if event_datetime >= now:
+                    upcoming_events.append((event_datetime, event_data))
+
+            except (ValueError, TypeError) as err:
+                _LOGGER.warning("Failed to parse event date: %s", err)
+                continue
+
+        if not upcoming_events:
+            return "No upcoming shows found"
+
+        # Sort by date and take first 10
+        upcoming_events.sort(key=lambda x: x[0])
+        next_10_events = upcoming_events[:10]
+
+        # Format the text
+        text_lines = []
+        for i, (_, event_data) in enumerate(next_10_events, 1):
+            formatted_event = self._format_event_for_text(event_data)
+            if formatted_event:
+                text_lines.append(f"{i}. {formatted_event}")
+
+        return " // ".join(text_lines) if text_lines else "No upcoming shows found"
+
+    def _format_event_for_text(self, event_data: dict[str, Any]) -> str | None:
+        """Format a single event for text display.
+
+        Args:
+            event_data: Event data with performer information
+
+        Returns:
+            Formatted string for the event or None if formatting fails
+        """
+        try:
+            performer_name = event_data.get("performer_name", "Unknown Artist")
+            venue_name = event_data.get("location", "Unknown Venue")
+            event_date_str = event_data.get("event_date")
+            venue_time_display = event_data.get("venue_time_display", "")
+
+            if not event_date_str:
+                return None
+
+            # Parse event date
+            event_date = datetime.datetime.strptime(event_date_str, "%Y-%m-%d").date()
+
+        except (ValueError, TypeError) as err:
+            _LOGGER.error("Failed to format event for text display: %s", err)
+            return None
+        else:
+            date_formatted = event_date.strftime("%b %d, %Y")
+
+            # Create formatted string: "Artist @ Venue - Date Time"
+            time_part = f" {venue_time_display}" if venue_time_display else ""
+            return f"{performer_name} @ {venue_name} - {date_formatted}{time_part}"

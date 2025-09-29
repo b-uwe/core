@@ -34,6 +34,7 @@ Claude is supposed to **ONLY AND SOLELY** work on and write to the `Music Favori
 
 1. The development workflow is described in upstream CLAUDE.md
 2. I expect claude to ALWAYS ruff, mypy and lint its code before claiming anything would be done! That also applies to test code!
-3. NO, ABSOLUTELY NO, error you find is irrelevant, independent of whether it has to do with your last changes or even the rough code area you want to touch. GO FIX EVERY error you find1
+3. NO, ABSOLUTELY NO, error you find is irrelevant, independent of whether it has to do with your last changes or even the rough code area you want to touch. GO FIX EVERY error you find
 4. After each new feature implementation new tests are supposed to be created ALWAYS, so that coverage stays above 99%
 5. After each new feature implementation check README.md and propose changes!
+6. BEFORE writing tests, have me test the feature in the UI
