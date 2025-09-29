@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 import logging
 
 import voluptuous as vol
@@ -14,7 +13,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 
 from .calendar_utils import update_filtered_calendar_cache
-from .const import DOMAIN
+from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 from .datatypes import MusicFavoritesConfigEntry
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 from .services import register_services
@@ -88,8 +87,8 @@ async def async_setup_entry(
     # Test MusicBrainz connectivity before setup
     _LOGGER.debug("Testing MusicBrainz connectivity during setup")
     try:
-        client = MusicBrainzClient(hass)
-        await client.search_artists("test", limit=1)
+        musicbrainz_client = MusicBrainzClient(hass)
+        await musicbrainz_client.search_artists("test", limit=1)
         _LOGGER.debug("MusicBrainz connectivity confirmed during setup")
 
     except MusicBrainzError as err:
@@ -104,8 +103,8 @@ async def async_setup_entry(
 
     # Initialize runtime data dict with MusicBrainz client
     entry.runtime_data = {
-        "update_interval": timedelta(hours=6),
-        "musicbrainz_client": client,
+        "update_interval": DEFAULT_UPDATE_INTERVAL,
+        "musicbrainz_client": musicbrainz_client,
         "filtered_calendar_events": [],  # Cache for distance-filtered events
     }
 

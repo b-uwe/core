@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from homeassistant.components.music_favorites.const import BandStatus
+from homeassistant.components.music_favorites.models import BandStatus
 from homeassistant.components.music_favorites.musicbrainz import extract_relation_links
 from homeassistant.components.music_favorites.sensor import (
     EntityManager,

@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from homeassistant.components.music_favorites.const import DOMAIN, BandStatus
+from homeassistant.components.music_favorites.const import DOMAIN
 from homeassistant.components.music_favorites.models import (
+    BandStatus,
     add_favorite,
     determine_band_status,
     extract_pure_event_data,
