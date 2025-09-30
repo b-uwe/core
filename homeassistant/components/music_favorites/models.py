@@ -270,6 +270,7 @@ async def add_favorite(
         "variants": favorite_variants,
         "status": band_status,
         "events": events_data,  # Store events data with the act
+        "musicbrainz_url": f"https://musicbrainz.org/artist/{musicbrainz_id}",
         **relation_links,  # Flatten relation links  into the object
     }
     current_favorites[musicbrainz_id] = favorite_data

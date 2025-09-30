@@ -152,6 +152,7 @@ async def test_add_favorite_with_entity_manager(
             "variants": ["Half Me"],
             "status": BandStatus.ACTIVE,  # Status is now included
             "events": [],  # Empty events list since LD+JSON returned empty
+            "musicbrainz_url": "https://musicbrainz.org/artist/963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",
             "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
             "bandsintown_url": "https://www.bandsintown.com/a/15548431",
             "discogs_url": "https://www.discogs.com/artist/12559079",

@@ -41,6 +41,7 @@ def mock_config_entry_with_iron_maiden():
         IRON_MAIDEN_COMPLETE_RESPONSE["id"]: {
             "variants": variants,
             "status": BandStatus.ACTIVE,
+            "musicbrainz_url": f"https://musicbrainz.org/artist/{IRON_MAIDEN_COMPLETE_RESPONSE['id']}",
             **relation_links,
         }
     }
@@ -70,6 +71,7 @@ def mock_config_entry_with_half_me():
     favorites_data = {
         HALF_ME_COMPLETE_RESPONSE["id"]: {
             "variants": variants,
+            "musicbrainz_url": f"https://musicbrainz.org/artist/{HALF_ME_COMPLETE_RESPONSE['id']}",
             **relation_links,
         }
     }
@@ -245,6 +247,7 @@ class TestFavoriteSensorWithRelationLinks:
         # Create favorite data structure
         favorite_data = {
             "variants": variants,
+            "musicbrainz_url": f"https://musicbrainz.org/artist/{IRON_MAIDEN_COMPLETE_RESPONSE['id']}",
             **relation_links,
         }
 
@@ -280,6 +283,11 @@ class TestFavoriteSensorWithRelationLinks:
         assert attributes["bandsintown_url"] == "https://www.bandsintown.com/a/1301"
         assert "discogs_url" in attributes
         assert attributes["discogs_url"] == "https://www.discogs.com/artist/251595"
+        assert "musicbrainz_url" in attributes
+        assert (
+            attributes["musicbrainz_url"]
+            == "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767"
+        )
         assert "songkick_url" in attributes
         assert attributes["songkick_url"] == "https://www.songkick.com/artists/438390"
 
@@ -306,6 +314,7 @@ class TestFavoriteSensorWithRelationLinks:
         # Create favorite data structure
         favorite_data = {
             "variants": variants,
+            "musicbrainz_url": f"https://musicbrainz.org/artist/{HALF_ME_COMPLETE_RESPONSE['id']}",
             **relation_links,
         }
 
@@ -340,6 +349,11 @@ class TestFavoriteSensorWithRelationLinks:
         assert attributes["bandsintown_url"] == "https://www.bandsintown.com/a/15548431"
         assert "discogs_url" in attributes
         assert attributes["discogs_url"] == "https://www.discogs.com/artist/12559079"
+        assert "musicbrainz_url" in attributes
+        assert (
+            attributes["musicbrainz_url"]
+            == "https://musicbrainz.org/artist/963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
+        )
         assert "songkick_url" in attributes
         assert attributes["songkick_url"] == "https://www.songkick.com/artists/10118274"
 
