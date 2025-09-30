@@ -326,6 +326,13 @@ def test_convert_to_calendar_event_complete(
     assert calendar_event.description is not None
     assert "Concert by Vulvodynia" in calendar_event.description
     assert "6:00 PM venue local time" in calendar_event.description
+    # Check that Bandsintown URL is included in description (cleaned of tracking parameters)
+    expected_clean_url = (
+        "https://www.bandsintown.com/e/1036117971-vulvodynia-at-o2-academy-islington"
+    )
+    assert expected_clean_url in calendar_event.description
+    # Ensure the tracking parameter is NOT in the description
+    assert "came_from=" not in calendar_event.description
     expected_uid = f"music_favorites_vulvodynia-id_{expected_date_str}"
     assert calendar_event.uid == expected_uid
 

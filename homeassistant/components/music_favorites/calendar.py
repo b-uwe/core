@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import datetime
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
@@ -126,10 +127,18 @@ class MusicFavoritesCalendar(CalendarEntity):
             # Create summary - use event_title directly (e.g., "Vulvodynia @ O2 Academy Islington")
             summary = event_title
 
-            # Create enhanced description with time info
+            # Create enhanced description with time info and URL
             description_parts = [f"Concert by {performer_name}"]
             if venue_time_display:
                 description_parts.append(f"Time: {venue_time_display} venue local time")
+
+            # Add Bandsintown event URL if available
+            event_url = event_data.get("url")
+            if event_url:
+                description_parts.append(
+                    f"Event details: {re.sub(r'[?&]came_from=\d+', '', event_url)}"
+                )
+
             description = " • ".join(description_parts)
 
             # Create location string
