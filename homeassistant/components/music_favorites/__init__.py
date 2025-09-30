@@ -14,6 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .calendar_utils import update_filtered_calendar_cache
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
+from .coordinator import MusicFavoritesCoordinator
 from .datatypes import MusicFavoritesConfigEntry
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 from .services import register_services
@@ -101,14 +102,51 @@ async def async_setup_entry(
             f"Failed to verify MusicBrainz connectivity: {err}"
         ) from err
 
-    # Initialize runtime data dict with MusicBrainz client
+    # Initialize data update coordinator
+    data_update_coordinator = MusicFavoritesCoordinator(hass, entry)
+
+    # Initialize runtime data dict with coordinator and other components
     entry.runtime_data = {
         "update_interval": DEFAULT_UPDATE_INTERVAL,
         "musicbrainz_client": musicbrainz_client,
+        "data_update_coordinator": data_update_coordinator,
         "filtered_calendar_events": [],  # Cache for distance-filtered events
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+
+    # CRITICAL: Add a dummy listener to ensure coordinator schedules future updates
+    #
+    # TECHNICAL BACKGROUND:
+    # DataUpdateCoordinator only schedules future refresh cycles if it has registered
+    # listeners (see coordinator._schedule_refresh() method). The logic is:
+    # - if not self._listeners: return  # No scheduling!
+    # - if self._listeners: self._schedule_refresh()  # Schedule next run
+    #
+    # PROBLEM: Our entities don't inherit from CoordinatorEntity, so they don't
+    # register as listeners. Without listeners, coordinator runs once and stops.
+    #
+    # SOLUTION: Register a dummy listener that does nothing but ensures the
+    # coordinator continues its automatic scheduling every update_interval.
+    #
+    # ALTERNATIVES CONSIDERED:
+    # 1. Make entities inherit from CoordinatorEntity - rejected because it would
+    #    require restructuring data flow (entities would read from coordinator.data
+    #    instead of config entry data)
+    # 2. Manual scheduling - more complex and error-prone
+    # 3. This dummy listener - simple, clean, preserves existing architecture
+    def dummy_listener() -> None:
+        """Dummy listener to enable DataUpdateCoordinator automatic scheduling.
+
+        This function intentionally does nothing. Its sole purpose is to ensure
+        the coordinator has at least one registered listener, which triggers
+        the coordinator's internal scheduling mechanism for future updates.
+        """
+
+    data_update_coordinator.async_add_listener(dummy_listener)
+
+    # Start the coordinator with a quick first refresh AFTER platforms are set up
+    await data_update_coordinator.async_config_entry_first_refresh()
 
     # Initialize filtered calendar cache after platforms are set up
     await update_filtered_calendar_cache(hass, entry)
@@ -120,4 +158,5 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: MusicFavoritesConfigEntry
 ) -> bool:
     """Unload a config entry."""
+    # The data update coordinator will be automatically stopped by Home Assistant
     return await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)

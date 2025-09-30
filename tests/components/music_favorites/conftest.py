@@ -8,7 +8,7 @@ import pytest
 @pytest.fixture
 def mock_musicbrainz_client():
     """Mock MusicBrainz client fixture - auto-applied to all tests."""
-    # Patch the imported symbol in __init__.py and config_flow.py
+    # Patch the imported symbol in __init__.py, config_flow.py, and coordinator.py
     with (
         patch(
             "homeassistant.components.music_favorites.MusicBrainzClient"
@@ -16,11 +16,15 @@ def mock_musicbrainz_client():
         patch(
             "homeassistant.components.music_favorites.config_flow.MusicBrainzClient"
         ) as mock_client_class_config,
+        patch(
+            "homeassistant.components.music_favorites.coordinator.MusicBrainzClient"
+        ) as mock_client_class_coordinator,
     ):
         # Create mock instance
         mock_client = AsyncMock()
         mock_client_class_init.return_value = mock_client
         mock_client_class_config.return_value = mock_client
+        mock_client_class_coordinator.return_value = mock_client
 
         # Mock successful search response
         mock_client.search_artists.return_value = [

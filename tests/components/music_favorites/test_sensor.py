@@ -134,7 +134,6 @@ class TestEntityManager:
         entity = call_args[0]
         assert isinstance(entity, FavoriteSensor)
         assert entity._favorite_key == musicbrainz_id
-        assert entity._favorite_variants == ["Black Sabbath"]
 
     async def test_add_favorite_entity_duplicate(self, entity_manager):
         """Test adding a duplicate entity (already in entity registry)."""
@@ -172,16 +171,19 @@ class TestFavoriteSensor:
             iron_maiden_id,
             favorite_data,
             mock_device_info,
+            mock_config_entry_with_iron_maiden,
         )
 
     async def test_init(self, favorite_sensor):
         """Test FavoriteSensor initialization."""
         iron_maiden_id = IRON_MAIDEN_COMPLETE_RESPONSE["id"]
         assert favorite_sensor._favorite_key == iron_maiden_id
-        assert favorite_sensor._favorite_variants[0] == "Iron Maiden"  # First variant
+        # Test that data is accessible via current favorite data
+        current_data = favorite_sensor._current_favorite_data
+        assert current_data.get("variants", [])[0] == "Iron Maiden"  # First variant
         assert favorite_sensor._attr_name == "Iron Maiden"
         assert favorite_sensor._attr_unique_id == f"favorite_{iron_maiden_id}"
-        assert favorite_sensor._attr_icon == "mdi:guitar-electric"  # ACTIVE status icon
+        assert favorite_sensor.icon == "mdi:guitar-electric"  # ACTIVE status icon
         assert hasattr(favorite_sensor, "_attr_has_entity_name")
 
     async def test_extra_state_attributes(self, favorite_sensor):
@@ -191,7 +193,9 @@ class TestFavoriteSensor:
         iron_maiden_id = IRON_MAIDEN_COMPLETE_RESPONSE["id"]
         assert attributes["musicbrainz_id"] == iron_maiden_id
         # Should have all Iron Maiden variants except first one (display name)
-        expected_variants = favorite_sensor._favorite_variants[1:]
+        expected_variants = favorite_sensor._current_favorite_data.get("variants", [])[
+            1:
+        ]
         assert attributes["variants"] == expected_variants
 
         # Should include relation URLs
@@ -209,20 +213,26 @@ class TestFavoriteSensor:
         """Test entity ID generation with various artist names."""
         # Test with special characters
         favorite_data = {"variants": ["Motörhead & Friends!"]}
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-id": favorite_data}}
         sensor = FavoriteSensor(
             "test-id",
             favorite_data,
             mock_device_info,
+            mock_entry,
         )
         # Should create safe entity ID with "act_" prefix
         assert sensor.entity_id == "sensor.music_favorites_act_motörhead_friends"
 
         # Test with multiple spaces and hyphens
         favorite_data2 = {"variants": ["Iron  Maiden - Legacy"]}
+        mock_entry2 = MagicMock()
+        mock_entry2.data = {"favorites": {"test-id-2": favorite_data2}}
         sensor2 = FavoriteSensor(
             "test-id-2",
             favorite_data2,
             mock_device_info,
+            mock_entry2,
         )
         assert sensor2.entity_id == "sensor.music_favorites_act_iron_maiden_legacy"
 
@@ -252,15 +262,20 @@ class TestFavoriteSensorWithRelationLinks:
         }
 
         # Create sensor with complete favorite data
+        mock_entry = MagicMock()
+        mock_entry.data = {
+            "favorites": {IRON_MAIDEN_COMPLETE_RESPONSE["id"]: favorite_data}
+        }
         sensor = FavoriteSensor(
             IRON_MAIDEN_COMPLETE_RESPONSE["id"],
             favorite_data,
             mock_device_info,
+            mock_entry,
         )
 
         # Test basic properties
         assert sensor._favorite_key == IRON_MAIDEN_COMPLETE_RESPONSE["id"]
-        assert sensor._favorite_variants == variants
+        assert sensor._current_favorite_data.get("variants", []) == variants
         assert sensor._attr_name == "Iron Maiden"  # First variant
         assert (
             sensor._attr_unique_id == f"favorite_{IRON_MAIDEN_COMPLETE_RESPONSE['id']}"
@@ -319,15 +334,20 @@ class TestFavoriteSensorWithRelationLinks:
         }
 
         # Create sensor with complete favorite data
+        mock_entry = MagicMock()
+        mock_entry.data = {
+            "favorites": {HALF_ME_COMPLETE_RESPONSE["id"]: favorite_data}
+        }
         sensor = FavoriteSensor(
             HALF_ME_COMPLETE_RESPONSE["id"],
             favorite_data,
             mock_device_info,
+            mock_entry,
         )
 
         # Test basic properties
         assert sensor._favorite_key == HALF_ME_COMPLETE_RESPONSE["id"]
-        assert sensor._favorite_variants == variants
+        assert sensor._current_favorite_data.get("variants", []) == variants
         assert sensor._attr_name == "Half Me"  # First variant
 
         # Test extra state attributes include relation links
@@ -364,10 +384,13 @@ class TestFavoriteSensorWithRelationLinks:
             "variants": ["Test Artist", "Test Alias"],
         }
 
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-musicbrainz-id": favorite_data}}
         sensor = FavoriteSensor(
             "test-musicbrainz-id",
             favorite_data,
             mock_device_info,
+            mock_entry,
         )
 
         # Test extra state attributes
@@ -394,10 +417,13 @@ class TestFavoriteSensorWithRelationLinks:
             # Missing bandsintown and songkick
         }
 
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-musicbrainz-id": favorite_data}}
         sensor = FavoriteSensor(
             "test-musicbrainz-id",
             favorite_data,
             mock_device_info,
+            mock_entry,
         )
 
         # Test extra state attributes

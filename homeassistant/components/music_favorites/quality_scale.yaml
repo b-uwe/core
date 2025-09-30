@@ -13,9 +13,7 @@ rules:
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
-  entity-event-setup:
-    status: exempt
-    comment: Integration does not subscribe to external events
+  entity-event-setup: done
   entity-unique-id: done
   has-entity-name:
     status: exempt
@@ -30,11 +28,11 @@ rules:
   config-entry-unloading: done
   docs-configuration-parameters: done
   docs-installation-parameters: done
-  entity-unavailable: done
-  integration-owner: done
-  log-when-unavailable:
+  entity-unavailable:
     status: exempt
-    comment: Integration manages only local data with no external devices or services that could become unavailable
+    comment: When external music services are unavailable, entities continue showing cached data rather than becoming unavailable - favorite bands remain valid even without fresh updates! That makes way more sense!
+  integration-owner: done
+  log-when-unavailable: done
   parallel-updates: done
   reauthentication-flow:
     status: exempt

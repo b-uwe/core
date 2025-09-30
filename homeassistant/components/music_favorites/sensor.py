@@ -65,7 +65,9 @@ class EntityManager:
             return
 
         # Entity doesn't exist, create it
-        entity = FavoriteSensor(musicbrainz_id, favorite_data, self._device_info)
+        entity = FavoriteSensor(
+            musicbrainz_id, favorite_data, self._device_info, self.entry
+        )
         self._async_add_entities([entity])
         _LOGGER.debug("Entity created and added for %s", display_name)
 
@@ -74,16 +76,19 @@ class FavoriteSensor(SensorEntity):
     """Sensor for a single favorite."""
 
     def __init__(
-        self, favorite_key: str, favorite_data: dict[str, Any], device_info: DeviceInfo
+        self,
+        favorite_key: str,
+        favorite_data: dict[str, Any],
+        device_info: DeviceInfo,
+        entry: MusicFavoritesConfigEntry,
     ) -> None:
         """Initialize the favorite sensor."""
         self._favorite_key = favorite_key
-        self._favorite_data = favorite_data
-        self._favorite_variants = favorite_data.get("variants", [])
-        # Get the display name
-        display_name = (
-            self._favorite_variants[0] if self._favorite_variants else "Unknown"
-        )
+        self._entry = entry
+
+        # Get the display name from initial data (for entity setup)
+        favorite_variants = favorite_data.get("variants", [])
+        display_name = favorite_variants[0] if favorite_variants else "Unknown"
 
         # Set entity name to just the band/artist name
         self._attr_name = display_name
@@ -97,24 +102,40 @@ class FavoriteSensor(SensorEntity):
         # Set entity_id directly instead of _attr_entity_id
         self.entity_id = f"sensor.music_favorites_act_{safe_name}"
 
-        # Set icon based on status (default to unknown if no status)
-        status = favorite_data.get("status", BandStatus.UNKNOWN)
-        self._attr_icon = BAND_STATUS_ICONS.get(status, "mdi:help-circle")
         self._attr_has_entity_name = False
+
+    @property
+    def _current_favorite_data(self) -> dict[str, Any]:
+        """Get current favorite data from config entry."""
+        favorites: dict[str, Any] = self._entry.data.get("favorites", {})
+        favorite_data: dict[str, Any] = favorites.get(self._favorite_key, {})
+        return favorite_data
+
+    @property
+    def icon(self) -> str:
+        """Return the icon based on current status."""
+        current_data = self._current_favorite_data
+        status = current_data.get("status", BandStatus.UNKNOWN)
+        return BAND_STATUS_ICONS.get(status, "mdi:help-circle")
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         """Attributes of the entity."""
+        current_data = self._current_favorite_data
+        variants = current_data.get("variants", [])
+
         attributes = {
             "musicbrainz_id": self._favorite_key,
-            "variants": self._favorite_variants[1:],  # All except display name
+            "variants": variants[1:]
+            if len(variants) > 1
+            else [],  # All except display name
         }
 
         # Add all relation links as individual attributes
         attributes.update(
             {
                 key: value
-                for key, value in self._favorite_data.items()
+                for key, value in current_data.items()
                 if key.endswith("_url")  # Only include relation URL attributes
             }
         )
@@ -125,8 +146,25 @@ class FavoriteSensor(SensorEntity):
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
         # Return the band status as the primary state
-        status = self._favorite_data.get("status", BandStatus.UNKNOWN)
+        current_data = self._current_favorite_data
+        status = current_data.get("status", BandStatus.UNKNOWN)
         return str(status)
+
+    async def async_added_to_hass(self) -> None:
+        """Entity has been added to hass."""
+        await super().async_added_to_hass()
+
+        # Listen for config entry updates to refresh sensor when data changes
+        self.async_on_remove(
+            self._entry.add_update_listener(self._config_entry_updated)
+        )
+
+    async def _config_entry_updated(
+        self, hass: HomeAssistant, entry: MusicFavoritesConfigEntry
+    ) -> None:
+        """Handle config entry updates."""
+        # Schedule update to refresh entity attributes and state
+        self.async_schedule_update_ha_state()
 
 
 async def async_setup_entry(
@@ -154,7 +192,7 @@ async def async_setup_entry(
     favorites_data = entry.data.get("favorites", {})
     initial_entities = []
     for musicbrainz_id, favorite_data in favorites_data.items():
-        entity = FavoriteSensor(musicbrainz_id, favorite_data, device_info)
+        entity = FavoriteSensor(musicbrainz_id, favorite_data, device_info, entry)
         initial_entities.append(entity)
 
     if initial_entities:

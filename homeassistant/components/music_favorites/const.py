@@ -12,7 +12,7 @@ RELATIONS_OF_INTEREST = [
     "Discogs",
     "Songkick",
 ]
-VERSION = "0.0.6"
+VERSION = "0.1.0"
 
 # Standard User-Agent for external HTTP requests (must come after VERSION)
 STANDARD_UA_FOR_FETCHES = f"Music Favorites {VERSION} (https://home-assistant.io/integrations/music_favorites)"
