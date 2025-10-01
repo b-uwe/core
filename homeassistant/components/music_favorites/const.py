@@ -22,4 +22,4 @@ DEFAULT_MAX_DISTANCE_KM = 100
 DISTANCE_FILTER_OPTIONS = ["25", "50", "100", "200", "500", "No limit"]
 
 # Update interval constants
-DEFAULT_UPDATE_INTERVAL = timedelta(hours=6)
+DEFAULT_UPDATE_INTERVAL = timedelta(hours=24)

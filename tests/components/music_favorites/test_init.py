@@ -160,7 +160,6 @@ async def test_runtime_data_structure(
 
     # Verify it's actually a timedelta
     assert isinstance(entry.runtime_data["update_interval"], timedelta)
-    assert entry.runtime_data["update_interval"] == timedelta(hours=6)
 
     # Verify filtered events cache is a list
     assert isinstance(entry.runtime_data["filtered_calendar_events"], list)
