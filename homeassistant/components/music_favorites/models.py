@@ -33,7 +33,7 @@ class BandStatus(StrEnum):
     UNKNOWN = "Unknown"
 
 
-# Status icons mapping
+# Status icons mapping for dynamic UI display based on band activity level
 BAND_STATUS_ICONS = {
     BandStatus.ACTIVE: "mdi:guitar-electric",
     BandStatus.DISBANDED: "mdi:music-off",
@@ -85,7 +85,8 @@ def extract_pure_event_data(
                 # Remove original datetime field
                 del converted_event["start_date"]
             except ValueError:
-                # Keep original if parsing fails
+                # Keep original datetime string if parsing fails (malformed Bandsintown data)
+                # This ensures we don't lose event data due to unexpected datetime formats
                 pass
 
         # Handle end_date if present (usually just date for Bandsintown)
@@ -105,15 +106,32 @@ def determine_band_status(
     events_data: list[dict[str, Any]] | None = None,
     previous_status: BandStatus | None = None,
 ) -> BandStatus:
-    """Determine the status of a band based on MusicBrainz data.
+    """Determine the current status of a band based on MusicBrainz and events data.
+
+    This function implements the business logic for determining band status by analyzing
+    MusicBrainz life-span data and upcoming events from Bandsintown. Status changes
+    trigger UI updates when used by the coordinator.
+
+    Logic Flow:
+    1. Check MusicBrainz life-span data → DISBANDED if end date exists
+    2. Detect reformation → REFORMED if previously disbanded but now active
+    3. Analyze tour events → ON_TOUR, TOUR_PLANNED based on event dates
+    4. Default to ACTIVE if none of the above apply
 
     Args:
-        artist_data: Artist data from MusicBrainz API
-        events_data: Events data from MusicBrainz API (optional)
-        previous_status: Previous status for reformed detection (optional)
+        artist_data: Artist data from MusicBrainz API containing life-span information
+        events_data: Optional list of upcoming events from Bandsintown for tour status
+        previous_status: Optional previous status for detecting REFORMED state transitions
 
     Returns:
-        BandStatus enum value
+        BandStatus: Enum value representing current band status (affects UI display)
+
+    Business Rules:
+        - DISBANDED: Band has ended according to MusicBrainz life-span
+        - REFORMED: Previously disbanded band is now active again
+        - ON_TOUR: Events within 30 days before to 2 days after today
+        - TOUR_PLANNED: Events within next 180 days
+        - ACTIVE: Default status for active bands without tour activity
     """
     # Check if band has ended (disbanded)
     life_span = artist_data.get("life-span", {})
@@ -121,6 +139,8 @@ def determine_band_status(
 
     if end_date:
         # Check if this was previously disbanded and now active (reformed)
+        # TO DO: This is fundamentally flawed! Note is taken, we'll fix it with
+        # one of the immediate next commits!
         if previous_status == BandStatus.DISBANDED:
             return BandStatus.REFORMED
         return BandStatus.DISBANDED
@@ -136,13 +156,38 @@ def determine_band_status(
 
 
 def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
-    """Check tour status based on events data.
+    """Determine current tour status based on upcoming concert event dates.
+
+    Analyzes concert events to determine if a band is currently on tour or has
+    tour plans. This function implements the business logic for tour-related
+    status determination used in status icon and UI display.
+
+    Tour Status Logic:
+    - ON_TOUR: Events within 30 days before to 2 days after today
+    - TOUR_PLANNED: Events within next 180 days (but not in ON_TOUR window)
+    - None: No qualifying events found
+
+    Time Windows (from const.py):
+    - TOUR_PREVIEW_PERIOD: 30 days before events = "On Tour"
+    - TOUR_GRACE_PERIOD: 2 days after events = still "On Tour"
+    - TOUR_PLANNED_PERIOD: 180 days ahead = "Tour Planned"
+
+    UI Impact:
+    - ON_TOUR → mdi:bus-marker icon, indicates active touring
+    - TOUR_PLANNED → mdi:bus-clock icon, indicates upcoming tour
+    - None → Falls back to ACTIVE status with mdi:guitar-electric icon
 
     Args:
-        events_data: List of events from future event sources
+        events_data: List of event dicts with "event_date" keys in "YYYY-MM-DD" format
 
     Returns:
-        BandStatus.ON_TOUR, BandStatus.TOUR_PLANNED, or None
+        BandStatus: ON_TOUR, TOUR_PLANNED, or None if no tour activity detected
+                   Used by determine_band_status() for final status determination
+
+    Business Rules:
+        - ON_TOUR takes precedence over TOUR_PLANNED
+        - Only parses valid date formats, skips malformed event dates
+        - Uses closest future event for TOUR_PLANNED determination
     """
     today = date.today()
 
@@ -161,7 +206,8 @@ def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
             event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
             days_until_event = (event_date - today).days
 
-            # Check if currently on tour (within active window)
+            # Check if currently on tour (within active window) and return
+            # IMMEDIATELY, in case
             if -TOUR_GRACE_PERIOD.days <= days_until_event <= TOUR_PREVIEW_PERIOD.days:
                 return BandStatus.ON_TOUR
 
@@ -181,17 +227,46 @@ def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
     return None
 
 
-# The main favorites storage - structure with variants and relation links
-# Format: {"MusicBrainz ID": {"variants": ["Display Name", "variant1", ...], "allmusic_url": "...", ...}}
-favorites: dict[str, dict[str, Any]] = {}
-
-
 async def add_favorite(
     hass: HomeAssistant,
     entry: ConfigEntry,
     musicbrainz_id: str,
 ) -> None:
-    """Add a new favorite to the collection."""
+    """Add a new favorite to the collection and sync across all components.
+
+    This function performs the complete flow for adding a favorite, including
+    data fetching, storage, entity creation, and cache updates.
+
+    Data Flow & Synchronization Points:
+    1. Fetch artist data from MusicBrainz API → Get name, aliases, relations
+    2. Fetch events from Bandsintown → Get upcoming concerts/tour info
+    3. Update config entry data → Triggers config entry listeners across platforms
+    4. Create sensor entity dynamically → New entity appears in UI immediately
+    5. Update calendar cache → Calendar events become available
+
+    UI Update Points:
+    - Config entry update → All platforms receive update notifications
+    - Entity creation → New sensor appears in UI with current status
+    - Calendar cache update → Concert events appear in calendar entity
+    - Entity state refresh → Status and events display with real data
+
+    Args:
+        hass: Home Assistant instance for API calls and entity management
+        entry: Config entry to store the favorite data (triggers sync to other components)
+        musicbrainz_id: Unique MusicBrainz identifier for the artist
+
+    Returns:
+        None
+
+    Raises:
+        ServiceValidationError: When favorite already exists or MusicBrainz API fails
+
+    Side Effects:
+        - Modifies entry.data["favorites"] → Triggers all config entry listeners
+        - Creates new sensor entity → Entity appears in UI immediately
+        - Updates calendar cache → Calendar entity refreshes with new events
+        - No HA events fired (events only fired during coordinator updates)
+    """
     _LOGGER.debug("Adding favorite with MusicBrainz ID: %s", musicbrainz_id)
 
     # Get current favorites
@@ -234,9 +309,10 @@ async def add_favorite(
             "Found Bandsintown URL, extracting LD+JSON data: %s", bandsintown_url
         )
         try:
+            # Fetching the Bandsintown page and extract the LD+JSON objects
             ldjson_data = await fetch_and_extract_ldjson(hass, bandsintown_url)
 
-            # Parse MusicEvents and use them for status determination
+            # Parse MusicEvents
             music_events = extract_music_events(ldjson_data)
             if music_events:
                 # Extract pure date and time data for storage
@@ -251,7 +327,7 @@ async def add_favorite(
     else:
         _LOGGER.debug("No Bandsintown URL found for artist %s", name)
 
-    # Determine band status with events data (now using Bandsintown events if available)
+    # Determine band status with events data
     band_status = determine_band_status(artist_data, events_data)
 
     # Add new favorite with name, aliases, and relation links from MusicBrainz
@@ -286,7 +362,6 @@ async def add_favorite(
     if hasattr(entry, "runtime_data") and entry.runtime_data:
         entity_manager = entry.runtime_data.get("entity_manager")
         if entity_manager:
-            _LOGGER.debug("Calling entity_manager.add_favorite_entity for %s", name)
             entity_manager.add_favorite_entity(musicbrainz_id, favorite_data)
         else:
             _LOGGER.warning(
@@ -308,7 +383,37 @@ async def remove_favorite(
     entry: ConfigEntry,
     musicbrainz_id: str,
 ) -> None:
-    """Remove a favorite from the collection."""
+    """Remove a favorite from the collection and sync removal across all components.
+
+    This function performs the complete flow for removing a favorite, including
+    data cleanup, entity removal, and cache updates.
+
+    Data Flow & Synchronization Points:
+    1. Remove from config entry data → Triggers config entry listeners across platforms
+    2. Remove entity from entity registry → Entity disappears from UI immediately
+    3. Update calendar cache → Concert events removed from calendar entity
+
+    UI Update Points:
+    - Config entry update → All platforms receive removal notifications
+    - Entity registry removal → Sensor entity disappears from UI immediately
+    - Calendar cache update → Concert events disappear from calendar entity
+
+    Args:
+        hass: Home Assistant instance for entity registry access
+        entry: Config entry to modify (triggers sync to other components)
+        musicbrainz_id: Unique MusicBrainz identifier for the artist to remove
+
+    Returns:
+        None
+
+    Raises:
+        ServiceValidationError: When favorite with given MusicBrainz ID doesn't exist
+
+    Side Effects:
+        - Modifies entry.data["favorites"] → Triggers all config entry listeners
+        - Removes entity from entity registry → Entity disappears from UI immediately
+        - Updates calendar cache → Calendar entity refreshes without removed events
+    """
     _LOGGER.debug("Removing favorite with MusicBrainz ID: %s", musicbrainz_id)
 
     # Get current favorites
@@ -353,18 +458,37 @@ async def resolve_artist_from_name(
     hass: HomeAssistant,
     artist_name: str,
 ) -> dict[str, Any] | None:
-    """Resolve artist name to MusicBrainz ID using the decision logic.
+    """Resolve artist name to MusicBrainz ID using fuzzy matching and decision logic.
+
+    This function is used by the conversation platform and services to convert
+    user-provided artist names into precise MusicBrainz IDs for favorite management.
+    It implements smart matching logic to handle exact matches vs. ambiguous cases.
+
+    Search Logic:
+    1. Query MusicBrainz API with artist name → Get up to 10 matches
+    2. Analyze results → Apply decision rules based on match count and quality
+    3. Return action for calling code → Either create immediately or prompt user choice
+
+    UI Integration:
+    - "create" action → Calling code can immediately add favorite
+    - "choose" action → UI displays options for user selection
+    - "not_found" action → UI shows "no matches" message
 
     Args:
-        hass: Home Assistant instance
-        artist_name: The artist name to search for
+        hass: Home Assistant instance for MusicBrainz API client access
+        artist_name: User-provided artist name (from conversation, service call, etc.)
 
     Returns:
-        Dictionary with one of:
-        - {"action": "create", "name": "exact_name", "musicbrainz_id": "id"} - Exact match found
-        - {"action": "choose", "options": [{"name": "...", "musicbrainz_id": "..."}, ...]} - Multiple matches
-        - {"action": "not_found"} - No matches found
-        - None if MusicBrainz API error
+        Decision dictionary with one of:
+        - {"action": "create", "name": "exact_name", "musicbrainz_id": "id"} - Exact match found, ready to add
+        - {"action": "choose", "options": [{"name": "...", "musicbrainz_id": "..."}, ...]} - Multiple matches, user choice needed
+        - {"action": "not_found"} - No matches found in MusicBrainz
+        - None if MusicBrainz API error (temporary failure, should retry)
+
+    Decision Rules:
+        - Exactly 1 match + exact name match (case insensitive) → "create"
+        - Multiple matches OR 1 match with different name → "choose"
+        - No matches → "not_found"
     """
     _LOGGER.debug("Resolving artist name: '%s'", artist_name)
 

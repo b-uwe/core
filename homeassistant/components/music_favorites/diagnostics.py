@@ -14,7 +14,35 @@ from .datatypes import MusicFavoritesConfigEntry
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: MusicFavoritesConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for a config entry."""
+    """Generate comprehensive diagnostic information for troubleshooting and support.
+
+    Collects and organizes integration data for debugging purposes, providing insights
+    into configuration, favorites statistics, and entity states.
+
+    Diagnostic Data Collection:
+    1. Config entry metadata → Basic integration setup information
+    2. Favorites statistics → Quantitative analysis of user's collection
+    3. Favorites data → Sanitized favorite information without sensitive details
+    4. Entity states → Current sensor states and attributes for troubleshooting
+
+    Privacy Protection:
+    - No sensitive data exposed → MusicBrainz IDs and entity details remain private
+    - Aggregated statistics → Provides insights without revealing specific preferences
+    - State information → Includes current entity states for debugging UI issues
+
+    Args:
+        hass: Home Assistant instance for entity registry and state access
+        entry: Config entry containing favorites data and integration configuration
+
+    Returns:
+        dict: Comprehensive diagnostic data organized by category for analysis
+
+    Data Categories:
+        - config_entry: Integration setup and version information
+        - favorites_statistics: Quantitative analysis of user's collection
+        - favorites_data: Sanitized favorite information with variant counts
+        - entity_states: Current sensor states and attributes for debugging
+    """
 
     # Get favorites data
     favorites_data: dict[str, list[str]] = entry.data.get("favorites", {})

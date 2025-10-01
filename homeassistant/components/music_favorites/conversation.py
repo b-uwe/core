@@ -24,7 +24,20 @@ PARALLEL_UPDATES = 1
 
 
 def _raise_favorite_not_found(artist_name: str) -> NoReturn:
-    """Raise ServiceValidationError for favorite not found."""
+    """Raise standardized error for favorite artist not found in collection.
+
+    Helper function that provides consistent error messaging when users reference
+    an artist that is not in their favorites collection during voice commands.
+
+    Args:
+        artist_name: Name of the artist that was not found in favorites
+
+    Raises:
+        ServiceValidationError: Always raised with descriptive message about missing favorite
+
+    Returns:
+        NoReturn: Function never returns due to exception
+    """
     raise ServiceValidationError(f"Favorite '{artist_name}' not found")
 
 
@@ -33,19 +46,101 @@ async def async_setup_entry(
     entry: MusicFavoritesConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Music Favorites conversation entity."""
+    """Set up conversation platform from config entry with voice command integration.
+
+    Creates a conversation entity that provides voice command support for managing
+    favorite artists. Users can add and remove favorites using natural language
+    voice commands through Home Assistant's conversation system.
+    This was meant as some sort of hack until I can implement proper intents which again
+    is a hack because what I want is a NATIVE MUTABLE list of entities 🫣 right in the
+    associated device (and I didn't find a better hack yet)
+
+    Conversation Platform Setup:
+    1. Create conversation entity → Enables voice command processing
+    2. Register with specific entity ID → Ensures consistent conversation agent identification
+    3. Connect to config entry → Provides access to favorites data and services
+
+    Voice Command Integration:
+    - Add commands: "track [artist]", "+ [artist]", "add [artist] to music favorites"
+    - Remove commands: "untrack [artist]", "- [artist]", "remove [artist] from favorites"
+    - Choice handling: Number responses for multiple artist matches
+    - Error responses: Clear feedback for unrecognized commands or failures
+
+    Args:
+        _hass: Home Assistant instance (unused but required by platform interface)
+        entry: Config entry containing favorites data and serving as central data store
+        async_add_entities: HA callback to register conversation entity
+
+    Returns:
+        None
+
+    Side Effects:
+        - Creates conversation entity → Voice commands become available immediately
+        - Entity registers with fixed ID → "conversation.music_favorites_assistant"
+        - Connects to service layer → Voice commands trigger add_favorite/remove_favorite
+    """
     _LOGGER.debug("Setting up Music Favorites conversation platform")
     async_add_entities([MusicFavoritesConversationEntity(entry)])
 
 
 class MusicFavoritesConversationEntity(ConversationEntity):
-    """Music Favorites conversation entity."""
+    """Conversation entity for managing music favorites through natural language voice commands.
+
+    This entity provides a conversational interface for users to add and remove favorite
+    artists using voice commands through Home Assistant's conversation system. It supports
+    multiple command patterns and handles artist name resolution with disambiguation.
+
+    Voice Command Patterns:
+    - Add: "track [artist]", "+ [artist]", "add [artist] to music favorites"
+    - Remove: "untrack [artist]", "- [artist]", "remove [artist] from favorites"
+    - Choice selection: Number responses (1, 2, 3...) for multiple artist matches
+
+    Artist Resolution Flow:
+    1. Voice command received → Parse command pattern and extract artist name
+    2. MusicBrainz search → Find matching artists in music database
+    3. Single match → Add directly to favorites with confirmation
+    4. Multiple matches → Present numbered choices to user
+    5. User choice → Add selected artist to favorites
+    6. No matches → Inform user artist not found
+
+    State Management:
+    - Pending choices stored in runtime_data → Temporary storage for user selections
+    - Automatic cleanup → Pending choices expire after timeout to prevent memory leaks
+    - Error handling → Clear feedback for API failures and invalid commands
+
+    Integration Points:
+    - Uses add_favorite/remove_favorite → Triggers full synchronization cascade
+    - Connects to MusicBrainz API → Artist search and disambiguation
+    - Voice feedback → Natural language responses via intent system
+    """
 
     _attr_has_entity_name = True
     _attr_name = "Music Favorites Assistant"
 
     def __init__(self, entry: MusicFavoritesConfigEntry) -> None:
-        """Initialize the Music Favorites conversation entity."""
+        """Initialize conversation entity with config entry connection and fixed entity ID.
+
+        Sets up the conversation entity that processes natural language voice commands
+        for managing favorite artists. The entity connects to the config entry for
+        data access and uses a fixed entity ID for consistent conversation routing.
+
+        Entity Configuration:
+        - Name: "Music Favorites Assistant" → Clear identification in conversation system
+        - Fixed entity ID → "conversation.music_favorites_assistant" for routing consistency
+        - Unique ID: Based on config entry → Survives restarts and reloads
+        - Config entry connection → Access to favorites data and service layer
+
+        Args:
+            entry: Config entry containing favorites data and serving as central data store
+
+        Returns:
+            None
+
+        Side Effects:
+            - Sets fixed entity_id → Ensures conversation system routes commands correctly
+            - Stores config entry reference → Enables access to favorites data and services
+            - Logs entity creation → Debugging and monitoring purposes
+        """
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_conversation"
         # Set entity_id explicitly to ensure it matches expected conversation agent ID
@@ -54,13 +149,66 @@ class MusicFavoritesConversationEntity(ConversationEntity):
 
     @property
     def supported_languages(self) -> list[str]:
-        """Return list of supported languages."""
+        """Return list of supported languages for voice command processing.
+
+        Currently supports only English language voice commands. This property
+        tells Home Assistant which languages this conversation entity can handle.
+
+        Returns:
+            list[str]: List of supported language codes, currently only ["en"]
+
+        Future Expansion:
+            Additional languages can be added as regex patterns and responses
+            are internationalized for broader voice command support.
+        """
         return ["en"]  # Only English for now
 
     async def _async_handle_message(
         self, user_input: Any, chat_log: Any
     ) -> ConversationResult:
-        """Handle the conversation message."""
+        """Process voice commands and return appropriate responses with full synchronization integration.
+
+        This is the main entry point for all voice commands directed to the Music Favorites
+        assistant. It parses natural language input, extracts commands and artist names,
+        and executes the appropriate actions with comprehensive error handling.
+
+        Command Processing Flow:
+        1. Extract and normalize user text → Convert to lowercase and strip whitespace
+        2. Check for number input → Handle pending artist choice selections
+        3. Parse remove commands → "untrack", "- artist", "remove from favorites"
+        4. Parse add commands → "track", "+ artist", "add to music favorites"
+        5. Execute actions → Call add_favorite/remove_favorite with full sync cascade
+        6. Generate responses → Natural language feedback via speech synthesis
+
+        Supported Command Patterns:
+        - Add: "track [artist]", "+ [artist]", "add [artist] to music favorites"
+        - Remove: "untrack [artist]", "- [artist]", "remove [artist] from favorites"
+        - Choice: "1", "2", "3" (numbers for selecting from multiple artist matches)
+
+        Artist Resolution Process:
+        - Single match → Add directly with confirmation
+        - Multiple matches → Present numbered choices with disambiguation
+        - No matches → Clear error message about artist not found
+        - API errors → Informative error responses with retry suggestions
+
+        Synchronization Integration:
+        - Uses add_favorite() → Triggers full entity creation and UI updates
+        - Uses remove_favorite() → Triggers entity removal and UI refresh
+        - Voice confirmations → Immediate feedback while background sync occurs
+
+        Args:
+            user_input: User voice command input object containing text and metadata
+            chat_log: Conversation history (unused but required by HA interface)
+
+        Returns:
+            ConversationResult: Response object with speech text for user feedback
+
+        Side Effects:
+            - May add/remove favorites → Triggers full synchronization cascade
+            - May store pending choices → Temporary state for user selection
+            - Starts cleanup timers → Automatic memory management for pending state
+            - Logs all interactions → Debugging and monitoring purposes
+        """
         text = user_input.text.lower().strip()
         _LOGGER.debug("Conversation received: '%s'", text)
 
@@ -69,7 +217,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
             return await self._handle_number_choice(text)
 
         # Check for untrack/remove first to avoid conflicts
-        short_pattern = r"^-\s+(.+)"
+        short_pattern = r"^-\s*(.+)"
         untrack_pattern = r"^untrack\s+(.+)"
         remove_pattern = r"remove\s+(.+?)\s+from\s+(?:music\s+)?favorites"
 
@@ -125,7 +273,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 return ConversationResult(response=response)
 
         # Pattern: "track [artist/band]" or "add [artist/band] to music favorites"
-        short_pattern = r"^\+\s+(.+)"
+        short_pattern = r"^\+\s*(.+)"
         track_pattern = r"^track\s+(.+)"
         add_pattern = r"add\s+(.+?)\s+to\s+music\s+favorites"
 
@@ -162,7 +310,7 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 if resolution["action"] == "not_found":
                     # No matches found
                     response.async_set_speech(
-                        f"Sorry, I couldn't find any artist named {artist_name} in the music database."
+                        f"Sorry, I couldn't find any artist named {artist_name} in the music database. You're too underground 😅!"
                     )
                     return ConversationResult(response=response)
 
@@ -241,7 +389,29 @@ class MusicFavoritesConversationEntity(ConversationEntity):
     async def _cleanup_pending_choices(
         self, timeout: float = PENDING_CHOICES_CLEANUP_TIMEOUT
     ) -> None:
-        """Clean up pending choices after timeout."""
+        """Automatically clean up pending artist choices after timeout to prevent memory leaks.
+
+        This background task removes pending artist choice data from runtime storage
+        after a specified timeout period, ensuring that temporary state doesn't
+        accumulate indefinitely if users don't complete their selections.
+
+        Cleanup Process:
+        1. Wait for timeout period → Default timeout from PENDING_CHOICES_CLEANUP_TIMEOUT
+        2. Check runtime_data existence → Validate config entry and runtime storage
+        3. Remove pending choices → Delete temporary selection data
+        4. Log cleanup completion → Debugging and monitoring
+
+        Args:
+            timeout: Cleanup delay in seconds, defaults to PENDING_CHOICES_CLEANUP_TIMEOUT
+
+        Returns:
+            None
+
+        Side Effects:
+            - Removes pending_choices from runtime_data → Temporary state cleaned up
+            - Logs cleanup action → Debugging information
+            - No impact on active conversations → Only affects expired selections
+        """
         await asyncio.sleep(timeout)
         if (
             hasattr(self._entry, "runtime_data")
@@ -252,7 +422,41 @@ class MusicFavoritesConversationEntity(ConversationEntity):
             _LOGGER.debug("Cleaned up expired pending choices")
 
     async def _handle_number_choice(self, number_text: str) -> ConversationResult:
-        """Handle user number choice for pending artist selection."""
+        """Process user's numeric choice for artist disambiguation with full synchronization cascade.
+
+        This method handles the second phase of artist addition when multiple matches
+        were found during MusicBrainz search. It validates the user's numeric choice,
+        retrieves the corresponding MusicBrainz ID, and completes the add favorite process.
+
+        Choice Processing Flow:
+        1. Validate pending choices → Ensure user has active selection context
+        2. Parse and validate number → Convert to integer and check range
+        3. Retrieve MusicBrainz ID → Get stored ID from pending choices array
+        4. Clear pending state → Remove temporary selection data
+        5. Add favorite → Call add_favorite() with full synchronization cascade
+        6. Generate confirmation → Natural language success/error feedback
+
+        State Management:
+        - Retrieves from runtime_data → Accesses stored MusicBrainz IDs from previous search
+        - Clears pending choices → Removes temporary state after processing
+        - Error handling → Clear messages for invalid selections or missing context
+
+        Synchronization Integration:
+        - Calls add_favorite() → Triggers entity creation and UI updates
+        - Voice confirmation → Immediate feedback while background sync occurs
+        - Error responses → Clear feedback for duplicate favorites or API failures
+
+        Args:
+            number_text: User's numeric choice as string (e.g., "1", "2", "3")
+
+        Returns:
+            ConversationResult: Response with success confirmation or error message
+
+        Side Effects:
+            - Removes pending_choices from runtime_data → Clears temporary selection state
+            - May add favorite → Triggers full synchronization cascade if successful
+            - Logs selection and outcome → Debugging and monitoring purposes
+        """
         response = intent.IntentResponse(language="en")
 
         # Check if we have pending choices

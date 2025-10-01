@@ -20,21 +20,66 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
-    """Coordinator for updating music favorites data from MusicBrainz and Bandsintown."""
+    """Coordinator for updating music favorites data from external APIs.
+
+    This coordinator implements an update strategy that balances concurrent API usage
+    with data freshness. It uses a snapshot-based cycle approach to update one favorite
+    at a time, distributing updates evenly over the default interval.
+
+    Update Strategy:
+    - Takes snapshot of favorites at cycle start → Ensures consistency during updates
+    - Updates one favorite per cycle → Spreads API load and respects rate limits
+    - Dynamic interval calculation → Distributes updates evenly over 6-hour period
+    - Handles favorite additions/removals → Adjusts schedule automatically
+
+    Synchronization Points:
+    - Config entry updates → Updates propagate to all platforms automatically
+    - Entity state changes → Triggers UI refreshes via async_write_ha_state()
+    - Event changes → Fires custom HA events for added/removed concerts
+    - Calendar cache updates → Refreshes calendar entity with new event data
+    """
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: MusicFavoritesConfigEntry,
     ) -> None:
-        """Initialize the coordinator."""
+        """Initialize the coordinator with update scheduling and state tracking.
+
+        Sets up the data update coordinator with a cycle-based update logic
+        that processes one favorite at a time to distribute API load evenly over time
+        while ensuring all favorites stay current with external data sources.
+
+        Coordinator Architecture:
+        - Initial fast startup → Set a 30-second first interval, but else return immediately to avoid blocking HA startup
+        - Dynamic interval calculation → Distributes updates over DEFAULT_UPDATE_INTERVAL
+        - Snapshot-based cycles → Takes consistent view of favorites at cycle start
+        - API rate limiting → Updates one favorite per cycle to respect external APIs
+
+        State Management:
+        - Tracks current cycle state → Knows which favorites still need updates
+        - First update flag → Enables fast startup behavior
+        - MusicBrainz client → Handles artist data and relation URL fetching
+
+        Args:
+            hass: Home Assistant instance for config entry management and event firing
+            entry: Config entry containing favorites data and serving as central data store
+
+        Returns:
+            None
+
+        Side Effects:
+            - Initializes DataUpdateCoordinator with fast startup interval
+            - Creates MusicBrainz client for external API communication
+            - Sets up internal state tracking for cycle-based updates
+        """
         super().__init__(
             hass,
             logger=_LOGGER,
             name=DOMAIN,
             update_interval=timedelta(
-                seconds=30
-            ),  # Start with 30 seconds, then switch to 6 hours
+                seconds=30  # Those 30 seconds are for the VERY FIRST call!
+            ),
             config_entry=entry,
         )
         self.entry = entry
@@ -43,7 +88,43 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         self._current_cycle_bands: list[str] = []
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
-        """Fetch updated data for favorites using snapshot cycle approach."""
+        """Fetch updated data for favorites using intelligent snapshot cycle approach.
+
+        This method implements an update strategy that processes one favorite
+        per call, distributing API load over time while ensuring all favorites stay current.
+
+        Update Cycle Logic:
+        1. Fast startup → Return empty dict on first call to avoid blocking HA startup
+        2. Check cycle state → Start new cycle if current cycle is complete
+        3. Calculate dynamic interval → Distribute updates evenly over DEFAULT_UPDATE_INTERVAL
+        4. Process a favorite → Update one favorite with fresh data from APIs
+        5. Update config entry → Trigger synchronization across all platforms
+
+        Synchronization Triggers:
+        - Config entry update → All platforms receive notifications via update listeners
+        - Entity state changes → Sensors refresh with new status/events data
+        - Event changes → Custom HA events fired for added/removed concerts
+        - Return updated data → Coordinator notifies any registered listeners
+
+        Returns:
+            dict: Current favorites data from config entry
+
+            HA's DataUpdateCoordinator automatically stores this returned data in coordinator.data
+            and notifies any registered coordinator listeners, but our integration doesn't use
+            coordinator.data. Our entities read from entry.data instead for architectural consistency.
+
+            Real Data Flow in Our Integration:
+            1. Coordinator updates a favorite → Updates entry.data via async_update_entry()
+            2. Config entry update → Triggers config entry listeners across all platforms
+            3. Entities refresh → Read fresh data from entry.data, not coordinator.data
+
+            We return actual data (not None/{}) for forward compatibility and HA interface compliance.
+
+        Side Effects:
+            - May update config entry data → Triggers platform synchronization
+            - May fire HA events for event changes → External automations can listen
+            - Adjusts update interval dynamically → Balances freshness vs. API usage
+        """
         _LOGGER.debug("Starting music favorites data update cycle")
 
         # Fast startup: return immediately on first run to avoid blocking HA startup
@@ -57,7 +138,8 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             # Take snapshot of current favorites for new cycle
             current_favorites = dict(self.entry.data.get("favorites", {}))
             if not current_favorites:
-                # Set interval to DEFAULT_UPDATE_INTERVAL to re-check later
+                # No favorites to update: Set interval to DEFAULT_UPDATE_INTERVAL
+                # to re-check later
                 self.update_interval = DEFAULT_UPDATE_INTERVAL
                 _LOGGER.debug(
                     "No favorites to update, will re-check in %s",
@@ -145,14 +227,40 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         musicbrainz_id: str,
         current_data: dict[str, Any],
     ) -> dict[str, Any] | None:
-        """Update data for a single favorite.
+        """Update data for a single favorite by fetching fresh information from external APIs.
+
+        This method orchestrates the complete data refresh process for one favorite,
+        fetching updates from MusicBrainz and Bandsintown APIs in sequence. It implements
+        some change detection to avoid unnecessary config entry updates.
+
+        Multi-API Update Process:
+        1. Fetch MusicBrainz artist data → Update relation URLs (bandsintown_url, allmusic_url, etc.)
+        2. Fetch Bandsintown events → Update upcoming concert information
+        3. Determine band status → Calculate status based on life-span and events
+        4. Change detection → Only return data if any information actually changed
+
+        API Error Handling:
+        - MusicBrainz failures → Log warning, continue with events update
+        - Bandsintown failures → Log warning, continue with status update
+        - Unexpected errors → Log exception, continue processing other steps
+
+        Synchronization Points:
+        - Returns updated data → Triggers config entry update in calling _async_update_data()
+        - Config entry update → Triggers all platform listeners for UI refresh
+        - Event changes → Fires custom HA events via _fire_event_changes()
 
         Args:
-            musicbrainz_id: MusicBrainz ID of the favorite
-            current_data: Current favorite data
+            musicbrainz_id: Unique MusicBrainz identifier for the artist to update
+            current_data: Current favorite data from config entry for change comparison
 
         Returns:
-            Updated favorite data or None if no update needed
+            dict: Updated favorite data if any changes detected, triggers config entry sync
+            None: No changes detected, prevents unnecessary config entry updates
+
+        Side Effects:
+            - May fire HA events for event changes → External automations can listen
+            - Logs API successes/failures → Debugging and monitoring information
+            - No direct UI updates → Updates happen via config entry changes in caller
         """
         favorite_name = current_data.get("variants", ["Unknown"])[0]
         updated_data = current_data.copy()
@@ -223,7 +331,7 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     "Failed to update Bandsintown events for %s: %s", favorite_name, err
                 )
 
-        # Step 3: Update band status immediately after all data is fetched
+        # Step 3: Update band status
         if artist_data:
             try:
                 current_status = current_data.get("status")
@@ -254,13 +362,36 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         old_events: list[dict[str, Any]],
         new_events: list[dict[str, Any]],
     ) -> None:
-        """Fire Home Assistant events for added and removed events.
+        """Fire Home Assistant events for new and removed events.
+
+        This method detects and announces concert event changes via the HA event bus,
+        enabling external automations and notifications to respond to new or cancelled concerts.
+
+        Event Detection Logic:
+        1. Create unique keys for each event (date + location)
+        2. Compare old vs new event sets to find additions and removals
+        3. Fire custom HA events with detailed event information
+
+        Custom Events Fired:
+        - "music_favorites_event_added" → New concert announced
+        - "music_favorites_event_removed" → Concert cancelled/removed
+
+        External Integration:
+        These events can be used in HA automations for notifications, calendar updates,
+        or integration with other systems when favorite artists announce new shows.
 
         Args:
-            musicbrainz_id: MusicBrainz ID of the artist
-            artist_name: Name of the artist
-            old_events: Previous events list
-            new_events: New events list
+            musicbrainz_id: MusicBrainz ID of the artist (for event data)
+            artist_name: Display name of the artist (for user-friendly event data)
+            old_events: Previous events list (before coordinator update)
+            new_events: Current events list (after coordinator update)
+
+        Returns:
+            None
+
+        Side Effects:
+            - Fires custom HA events → Available for automations and external listeners
+            - Logs event changes → Debugging and monitoring purposes
         """
 
         # Create event keys for comparison (event_date + location)
@@ -271,7 +402,7 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         old_keys = {event_key(event) for event in old_events}
         new_keys = {event_key(event) for event in new_events}
 
-        # Find added and removed events
+        # Find added and removed events! I like how you subtract sets 😅👏
         added_keys = new_keys - old_keys
         removed_keys = old_keys - new_keys
 

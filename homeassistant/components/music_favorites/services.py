@@ -33,7 +33,36 @@ REMOVE_FAVORITE_SCHEMA = vol.Schema(
 def _get_target_entry(
     hass: HomeAssistant, call: ServiceCall
 ) -> MusicFavoritesConfigEntry:
-    """Get the target config entry for a service call."""
+    """Get and validate the target config entry for a service call.
+
+    This helper function handles config entry discovery and validation for service calls,
+    supporting both explicit config entry targeting and automatic discovery for voice commands.
+
+    Discovery Logic:
+    1. If config_entry specified → Find and validate specific entry
+    2. If no config_entry → Auto-discover first (and only) music_favorites entry
+    3. Validate entry is loaded and ready → Prevent service calls on broken integration
+
+    Voice Command Support:
+    Voice commands don't specify config entries, so this function automatically
+    finds the integration's config entry, enabling seamless voice control.
+
+    Args:
+        hass: Home Assistant instance for config entry access
+        call: Service call object containing optional config_entry parameter
+
+    Returns:
+        MusicFavoritesConfigEntry: Validated, loaded config entry ready for service operations
+
+    Raises:
+        ServiceValidationError: When config entry not found, not loaded, or integration unavailable
+                              (becomes user-visible error message in service response)
+
+    Validation Checks:
+        - Config entry exists in system
+        - Config entry is in LOADED state (not failed, unloaded, or setting up)
+        - Integration is ready to handle service calls
+    """
     config_entry_id = call.data.get("config_entry")
     if config_entry_id:
         target_entry = hass.config_entries.async_get_entry(config_entry_id)
@@ -55,7 +84,32 @@ def _get_target_entry(
 
 
 async def add_favorite_service(call: ServiceCall) -> None:
-    """Add a new favorite to the collection."""
+    """Add a new favorite to the collection via service call.
+
+    This service handler processes add_favorite service calls from users, voice commands,
+    and automations. It validates input, delegates to the add_favorite function, and
+    ensures proper error handling for service responses.
+
+    Service Integration Points:
+    - Called by HA service system → When music_favorites.add_favorite service invoked
+    - Validates config entry state → Ensures integration is loaded and ready
+    - Delegates to add_favorite() → Triggers full data flow and UI synchronization
+    - Returns success/failure → HA service system handles response to caller
+
+    Args:
+        call: ServiceCall object containing service data and Home Assistant instance
+
+    Returns:
+        None (service failure communicated via exceptions)
+
+    Raises:
+        ServiceValidationError: When validation fails (config entry not found/loaded,
+                              favorite already exists, MusicBrainz API errors)
+
+    Side Effects:
+        - Calls add_favorite() → Full synchronization cascade across all platforms
+        - Logs service execution → Debugging and monitoring purposes
+    """
     _LOGGER.debug("add_favorite service called with data: %s", call.data)
 
     hass = call.hass  # Get hass from the call object
@@ -79,7 +133,36 @@ async def add_favorite_service(call: ServiceCall) -> None:
 
 
 async def remove_favorite_service(call: ServiceCall) -> None:
-    """Remove a favorite from the collection."""
+    """Remove a favorite from the collection via service call.
+
+    This service handler processes remove_favorite service calls, validating input
+    and delegating to the remove_favorite function for the complete removal flow.
+
+    Flow:
+    - Called by HA service system → When music_favorites.remove_favorite service invoked
+    - Validates config entry state → Ensures integration is loaded and ready
+    - Delegates to remove_favorite() → Triggers entity removal and UI synchronization
+
+    UI Impact Flow:
+    1. Service call → Validation → remove_favorite() called
+    2. Config entry updated → All platforms notified via listeners
+    3. Entity removed from registry → Entity disappears from UI immediately
+    4. Calendar cache updated → Concert events removed from calendar
+
+    Args:
+        call: ServiceCall object containing musicbrainz_id and Home Assistant instance
+
+    Returns:
+        None (service failure communicated via exceptions)
+
+    Raises:
+        ServiceValidationError: When validation fails (config entry not found/loaded,
+                              favorite doesn't exist, or other removal errors)
+
+    Side Effects:
+        - Calls remove_favorite() → Full synchronization cascade across all platforms
+        - Logs service execution → Debugging and monitoring purposes
+    """
     _LOGGER.debug("remove_favorite service called with data: %s", call.data)
 
     hass = call.hass  # Get hass from the call object
@@ -99,7 +182,35 @@ async def remove_favorite_service(call: ServiceCall) -> None:
 
 
 def register_services(hass: HomeAssistant) -> None:
-    """Register all Music Favorites services."""
+    """Register all Music Favorites services with Home Assistant's service registry.
+
+    This function registers the integration's service handlers globally, making them
+    available system-wide for users, automations, and voice commands.
+
+    Services Registered:
+    - music_favorites.add_favorite → Adds new favorite artist via MusicBrainz ID
+    - music_favorites.remove_favorite → Removes existing favorite artist via MusicBrainz ID
+
+    Service Features:
+    - Schema validation → Input validated before handler called
+    - Global availability → Services work from any context (UI, automations, voice)
+    - Error handling → Service exceptions become user-visible messages
+
+    Integration Points:
+    - Called during async_setup() → Services available immediately after YAML/UI setup
+    - Persistent registration → Services survive config entry reloads
+
+    Args:
+        hass: Home Assistant instance for service registry access
+
+    Returns:
+        None
+
+    Side Effects:
+        - Registers services in hass.services global registry
+        - Services become available for external calls immediately
+        - Schema validation configured for automatic input checking
+    """
     _LOGGER.debug("Registering add_favorite service")
     hass.services.async_register(
         DOMAIN, "add_favorite", add_favorite_service, schema=ADD_FAVORITE_SCHEMA

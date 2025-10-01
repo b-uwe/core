@@ -11,7 +11,6 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
 from .const import DEFAULT_MAX_DISTANCE_KM, DOMAIN
-from .models import favorites
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,14 +27,75 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_import(
         self, imported_data: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle import from YAML configuration. Just forwarding..."""
+        """Handle configuration import from YAML setup and forward to user flow.
+
+        This method is called when the integration is configured via YAML in
+        configuration.yaml. It provides a bridge between YAML-based setup and
+        the standard UI config flow, ensuring consistent behavior regardless
+        of configuration method.
+        We can ofc. only do this because the Flow doesn't include any user input.
+        So, this will break should we ever consider a more sophisticated Config Flow.
+
+        YAML Integration Flow:
+        1. async_setup() detects YAML config → Triggers async_init() with source="import"
+        2. Config flow system → Calls this async_step_import() method
+        3. Forward to user flow → Delegates to async_step_user() for actual setup
+        4. Config entry created → Integration becomes available with empty favorites
+
+        Args:
+            imported_data: Optional YAML configuration data (currently unused as
+                          YAML schema only allows empty dict, reserved for future use)
+
+        Returns:
+            ConfigFlowResult: Result from async_step_user() - either form display or entry creation
+
+        Side Effects:
+            - Delegates to async_step_user() → May create config entry immediately
+            - No validation needed → YAML schema already validated input
+        """
 
         return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the UI Config Flow Creation - which comes with a super simplistic form."""
+        """Handle the main UI config flow with connectivity validation and config entry creation.
+
+        This method implements the core config flow logic for both UI-initiated and
+        YAML-imported setups. It presents a minimal form to the user and performs
+        essential connectivity validation before creating the config entry.
+
+        Config Flow Logic:
+        1. Set unique ID → Prevents multiple integration instances (enforces single instance)
+        2. Show empty form → User confirms setup (no actual input required currently)
+        3. Validate connectivity → Test MusicBrainz API access before setup
+        4. Create config entry → Initialize integration with empty favorites and default settings
+
+        Connectivity Validation:
+        - Tests MusicBrainz API → Ensures external dependency is accessible
+        - Comprehensive error handling → Provides specific error messages for different failure types
+        - Fail-fast approach → Prevents config entry creation if API unavailable
+
+        Error Handling Categories:
+        - MusicBrainzError → API-specific errors (rate limits, API down)
+        - ClientConnectorError → Network connectivity issues
+        - ClientError → General HTTP client problems
+        - TimeoutError → Request timeout scenarios
+        - Exception → Catch-all for unexpected errors
+
+        Args:
+            user_input: User form submission data (None for initial form display,
+                       empty dict {} after form submission due to empty schema)
+
+        Returns:
+            ConfigFlowResult: Either form display (if user_input is None or errors occurred)
+                             or config entry creation (if connectivity test passed)
+
+        Side Effects:
+            - Sets unique ID → Prevents duplicate config entries
+            - Tests external API → May fail if MusicBrainz unavailable
+            - Creates config entry → Triggers async_setup_entry() and integration initialization
+        """
         errors: dict[str, str] = {}
 
         # Set unique ID to prevent multiple instances of this service integration
@@ -128,7 +188,7 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(
             title="Music Favorites",
             data={
-                "favorites": favorites,
+                "favorites": {},
                 "distance_filter": DEFAULT_MAX_DISTANCE_KM,
             },
         )
