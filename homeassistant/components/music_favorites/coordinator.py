@@ -284,6 +284,10 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     if key.endswith("_url"):
                         del updated_data[key]
                 updated_data.update(new_relation_links)
+                # Always add musicbrainz_url (constructed from ID)
+                updated_data["musicbrainz_url"] = (
+                    f"https://musicbrainz.org/artist/{musicbrainz_id}"
+                )
                 data_changed = True
                 _LOGGER.debug("Updated relation links for %s", favorite_name)
 
