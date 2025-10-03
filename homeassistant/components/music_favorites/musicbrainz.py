@@ -208,7 +208,7 @@ class MusicBrainzClient:
         ]
 
         if simplified_artists:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Found %d artists for '%s', best match: '%s' (score: %d)",
                 len(simplified_artists),
                 query,
@@ -217,7 +217,7 @@ class MusicBrainzClient:
             )
             return simplified_artists
 
-        _LOGGER.info("No artists found for query '%s'", query)
+        _LOGGER.debug("No artists found for query '%s'", query)
         return []
 
     async def get_artist_by_id(self, artist_id: str) -> dict[str, Any]:

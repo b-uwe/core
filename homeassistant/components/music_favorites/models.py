@@ -105,6 +105,8 @@ def determine_band_status(
     artist_data: dict[str, Any],
     events_data: list[dict[str, Any]] | None = None,
     previous_status: BandStatus | None = None,
+    previous_artist_data: dict[str, Any] | None = None,
+    reformed_date: str | None = None,
 ) -> BandStatus:
     """Determine the current status of a band based on MusicBrainz and events data.
 
@@ -113,39 +115,72 @@ def determine_band_status(
     trigger UI updates when used by the coordinator.
 
     Logic Flow:
-    1. Check MusicBrainz life-span data → DISBANDED if end date exists
-    2. Detect reformation → REFORMED if previously disbanded but now active
-    3. Analyze tour events → ON_TOUR, TOUR_PLANNED based on event dates
-    4. Default to ACTIVE if none of the above apply
+    1. Check for MusicBrainz reformation signals → REFORMED if ended=false or end date removed
+    2. Maintain REFORMED status for REFORMED_DISPLAY_PERIOD → Then reassess
+    3. Check MusicBrainz life-span data → DISBANDED if ended=true
+    4. Analyze tour events → ON_TOUR, TOUR_PLANNED based on event dates
+    5. Default to ACTIVE if none of the above apply
 
     Args:
-        artist_data: Artist data from MusicBrainz API containing life-span information
+        artist_data: Current artist data from MusicBrainz API containing life-span information
         events_data: Optional list of upcoming events from Bandsintown for tour status
-        previous_status: Optional previous status for detecting REFORMED state transitions
+        previous_status: Optional previous status for detecting status transitions
+        previous_artist_data: Optional previous artist data for comparing MusicBrainz changes
+        reformed_date: Optional ISO date string when REFORMED status was first set
 
     Returns:
         BandStatus: Enum value representing current band status (affects UI display)
 
     Business Rules:
-        - DISBANDED: Band has ended according to MusicBrainz life-span
-        - REFORMED: Previously disbanded band is now active again
+        - REFORMED: MusicBrainz signals reformation (ended=false or end date removed)
+        - REFORMED (maintained): Keep for REFORMED_DISPLAY_PERIOD after initial detection
+        - DISBANDED: Band has ended according to MusicBrainz (ended=true)
         - ON_TOUR: Events within 30 days before to 2 days after today
         - TOUR_PLANNED: Events within next 180 days
         - ACTIVE: Default status for active bands without tour activity
     """
-    # Check if band has ended (disbanded)
-    life_span = artist_data.get("life-span", {})
-    end_date = life_span.get("end")
+    today = date.today()
+    current_life_span = artist_data.get("life-span", {})
+    current_ended = current_life_span.get("ended", False)
+    current_end_date = current_life_span.get("end")
 
-    if end_date:
-        # Check if this was previously disbanded and now active (reformed)
-        # TO DO: This is fundamentally flawed! Note is taken, we'll fix it with
-        # one of the immediate next commits!
-        if previous_status == BandStatus.DISBANDED:
+    # Check if we should maintain REFORMED status for the display period
+    if previous_status == BandStatus.REFORMED and reformed_date:
+        try:
+            reformed_date_obj = datetime.strptime(reformed_date, "%Y-%m-%d").date()
+            if today - reformed_date_obj <= REFORMED_DISPLAY_PERIOD:
+                return BandStatus.REFORMED
+        except (ValueError, TypeError):
+            # Invalid reformed_date, continue with normal logic
+            pass
+
+    # Check for MusicBrainz reformation signals by comparing with previous data
+    if previous_artist_data:
+        previous_life_span = previous_artist_data.get("life-span", {})
+        previous_ended = previous_life_span.get("ended", False)
+        previous_end_date = previous_life_span.get("end")
+
+        # Reformation signal 1: ended changed from true to false
+        if previous_ended and not current_ended:
+            _LOGGER.info(
+                "MusicBrainz reformation detected: ended changed from true to false"
+            )
             return BandStatus.REFORMED
+
+        # Reformation signal 2: end date was removed (became None)
+        if previous_end_date and not current_end_date:
+            _LOGGER.info(
+                "MusicBrainz reformation detected: end date removed (%s -> None)",
+                previous_end_date,
+            )
+            return BandStatus.REFORMED
+
+    # Check if band is currently ended according to MusicBrainz
+    # Either ended=true or presence of end date indicates disbanded status
+    if current_ended or current_end_date:
         return BandStatus.DISBANDED
 
-    # Band is active - check tour status
+    # Band is active (not ended) - check tour status
     if events_data:
         tour_status = get_tour_status(events_data)
         if tour_status:
@@ -327,7 +362,7 @@ async def add_favorite(
     else:
         _LOGGER.debug("No Bandsintown URL found for artist %s", name)
 
-    # Determine band status with events data
+    # Determine band status with events data (no previous data on initial add)
     band_status = determine_band_status(artist_data, events_data)
 
     # Add new favorite with name, aliases, and relation links from MusicBrainz

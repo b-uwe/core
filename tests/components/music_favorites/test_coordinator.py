@@ -727,4 +727,6 @@ class TestMusicFavoritesCoordinator:
                 IRON_MAIDEN_COMPLETE_RESPONSE,
                 mock_events,
                 BandStatus.UNKNOWN,
+                None,  # previous_artist_data
+                None,  # reformed_date
             )

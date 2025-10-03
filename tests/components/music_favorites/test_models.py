@@ -1,6 +1,6 @@
 """Test Music Favorites model functions."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import json
 import logging
 from typing import Any
@@ -820,13 +820,203 @@ def test_determine_band_status_disbanded() -> None:
     assert status == BandStatus.DISBANDED
 
 
-def test_determine_band_status_reformed() -> None:
-    """Test determine_band_status returns REFORMED when band was previously disbanded."""
-    # Band with end date but was previously disbanded
-    artist_data = {"name": "Test Band", "life-span": {"begin": "2000", "end": "2020"}}
+def test_determine_band_status_reformed_ended_to_false() -> None:
+    """Test determine_band_status returns REFORMED when MusicBrainz ended changes from true to false."""
+    # Band currently shows as active
+    current_artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "ended": False},
+    }
+
+    # Previous data showed band as ended
+    previous_artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
     events_data: list[dict[str, Any]] = []
 
-    status = determine_band_status(artist_data, events_data, BandStatus.DISBANDED)
+    status = determine_band_status(
+        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+    )
+    assert status == BandStatus.REFORMED
+
+
+def test_determine_band_status_reformed_end_date_removed() -> None:
+    """Test determine_band_status returns REFORMED when MusicBrainz end date is removed."""
+    # Band currently shows no end date
+    current_artist_data = {"name": "Reformed Band", "life-span": {"begin": "1980"}}
+
+    # Previous data had an end date
+    previous_artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(
+        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+    )
+    assert status == BandStatus.REFORMED
+
+
+def test_determine_band_status_reformed_maintained_for_period() -> None:
+    """Test determine_band_status maintains REFORMED status for REFORMED_DISPLAY_PERIOD."""
+
+    # Band is still ended according to MusicBrainz
+    artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    # Reformed date was set 30 days ago (within 180-day period)
+    reformed_date = (date.today() - timedelta(days=30)).isoformat()
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(
+        artist_data, events_data, BandStatus.REFORMED, None, reformed_date
+    )
+    assert status == BandStatus.REFORMED
+
+
+def test_determine_band_status_reformed_period_expired() -> None:
+    """Test determine_band_status returns DISBANDED when REFORMED period expires."""
+
+    # Band is still ended according to MusicBrainz
+    artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    # Reformed date was set 200 days ago (beyond 180-day period)
+    reformed_date = (date.today() - timedelta(days=200)).isoformat()
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(
+        artist_data, events_data, BandStatus.REFORMED, None, reformed_date
+    )
+    assert status == BandStatus.DISBANDED
+
+
+def test_determine_band_status_reformed_invalid_date() -> None:
+    """Test determine_band_status handles invalid reformed_date gracefully."""
+    # Band is still ended according to MusicBrainz
+    artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    # Invalid reformed_date
+    reformed_date = "invalid-date-format"
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(
+        artist_data, events_data, BandStatus.REFORMED, None, reformed_date
+    )
+    # Should fall back to normal logic (DISBANDED since ended=true)
+    assert status == BandStatus.DISBANDED
+
+
+def test_determine_band_status_no_previous_data() -> None:
+    """Test determine_band_status works without previous artist data."""
+    # Band is currently ended
+    artist_data = {
+        "name": "Test Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(artist_data, events_data, BandStatus.DISBANDED, None)
+    assert status == BandStatus.DISBANDED
+
+
+def test_determine_band_status_no_reformation_signals() -> None:
+    """Test determine_band_status doesn't detect reformation without proper signals."""
+    # Band remained ended in both periods
+    current_artist_data = {
+        "name": "Still Disbanded",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    previous_artist_data = {
+        "name": "Still Disbanded",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(
+        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+    )
+    assert status == BandStatus.DISBANDED
+
+
+def test_determine_band_status_the_kinks_scenario() -> None:
+    """Test The Kinks scenario: band with ended=true should return DISBANDED, not REFORMED."""
+    # Simulate The Kinks: ended in 1996, still ended
+    current_artist_data = {
+        "name": "The Kinks",
+        "life-span": {"begin": "1964", "end": "1996", "ended": True},
+    }
+
+    # Previous data same as current (no change)
+    previous_artist_data = {
+        "name": "The Kinks",
+        "life-span": {"begin": "1964", "end": "1996", "ended": True},
+    }
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(
+        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+    )
+    # Should remain DISBANDED, NOT become REFORMED
+    assert status == BandStatus.DISBANDED
+
+
+def test_determine_band_status_active_with_ended_false() -> None:
+    """Test band with ended=false returns appropriate active status."""
+    # Band explicitly marked as not ended
+    artist_data = {
+        "name": "Active Band",
+        "life-span": {"begin": "1980", "ended": False},
+    }
+
+    events_data: list[dict[str, Any]] = []
+
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.ACTIVE
+
+
+def test_determine_band_status_reformed_with_events() -> None:
+    """Test REFORMED band with events gets tour status instead."""
+
+    # Band is currently active after reformation
+    current_artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "ended": False},
+    }
+
+    # Previous data showed band as ended
+    previous_artist_data = {
+        "name": "Reformed Band",
+        "life-span": {"begin": "1980", "end": "1996", "ended": True},
+    }
+
+    # Add tour events that would make them ON_TOUR
+    current_date = datetime.now()
+    event_date = current_date + timedelta(days=15)  # Within tour preview window
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
+
+    status = determine_band_status(
+        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+    )
+    # Should return REFORMED, not ON_TOUR, because reformation takes precedence
     assert status == BandStatus.REFORMED
 
 

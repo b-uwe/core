@@ -44,7 +44,14 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
             data={
                 "favorites": {
                     "17b53d9f-5c63-4a09-a593-dde4608e0db9": {
-                        "variants": ["The Kinks"],
+                        "variants": [
+                            "The Kinks",
+                            "Kinks",
+                            "Muswell Ravens",
+                            "The Bollweevils",
+                            "The Boll‐Weevils",
+                            "The Ravens",
+                        ],
                         "status": "Disbanded",
                         "events": [],
                         "musicbrainz_url": "https://musicbrainz.org/artist/17b53d9f-5c63-4a09-a593-dde4608e0db9",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 import logging
 from typing import Any
 
@@ -13,7 +13,7 @@ from .bandsintown import extract_music_events
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 from .datatypes import MusicFavoritesConfigEntry
 from .ldjson import LdJsonError, fetch_and_extract_ldjson
-from .models import determine_band_status, extract_pure_event_data
+from .models import BandStatus, determine_band_status, extract_pure_event_data
 from .musicbrainz import MusicBrainzClient, MusicBrainzError, extract_relation_links
 
 _LOGGER = logging.getLogger(__name__)
@@ -336,19 +336,37 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             try:
                 current_status = current_data.get("status")
                 events_data = updated_data.get("events", [])
+                previous_artist_data = current_data.get("previous_artist_data")
+                reformed_date = current_data.get("reformed_date")
+
                 new_status = determine_band_status(
-                    artist_data, events_data, current_status
+                    artist_data,
+                    events_data,
+                    current_status,
+                    previous_artist_data,
+                    reformed_date,
                 )
 
                 if new_status != current_status:
                     updated_data["status"] = new_status
                     data_changed = True
+
+                    # Store reformed_date when status changes to REFORMED
+                    if (
+                        new_status == BandStatus.REFORMED
+                        and current_status != BandStatus.REFORMED
+                    ):
+                        updated_data["reformed_date"] = date.today().isoformat()
+
                     _LOGGER.debug(
                         "Updated status for %s: %s -> %s",
                         favorite_name,
                         current_status,
                         new_status,
                     )
+
+                # Always store current artist data as previous for next comparison
+                updated_data["previous_artist_data"] = artist_data
 
             except Exception:
                 _LOGGER.exception("Failed to update status for %s", favorite_name)
