@@ -147,7 +147,7 @@ class MusicFavoritesCalendar(CalendarEntity):
         # Register this calendar entity in runtime_data for easy access
         self._entry.runtime_data["calendar_entity"] = self
 
-        # Listen for config entry updates to refresh calendar when favorites change
+        # Register listener for config entry updates and ensure cleanup when entity is removed
         self.async_on_remove(
             self._entry.add_update_listener(self._config_entry_updated)
         )
