@@ -18,7 +18,10 @@ from homeassistant.components.music_favorites.models import (
     remove_favorite,
     resolve_artist_from_name,
 )
-from homeassistant.components.music_favorites.musicbrainz import MusicBrainzError
+from homeassistant.components.music_favorites.musicbrainz import (
+    MusicBrainzClient,
+    MusicBrainzError,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
@@ -70,18 +73,25 @@ async def test_add_favorite_success(hass: HomeAssistant, mock_config_entry) -> N
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
-        patch(
-            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
-        ) as mock_fetch_ldjson,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
-        mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
-        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
+        mock_fetch_external.return_value = {
+            "artist_data": HALF_ME_COMPLETE_RESPONSE,
+            "relation_links": {
+                "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
+                "bandsintown_url": "https://www.bandsintown.com/a/15548431",
+                "discogs_url": "https://www.discogs.com/artist/12559079",
+                "songkick_url": "https://www.songkick.com/artists/10118274",
+                "musicbrainz_url": "https://musicbrainz.org/artist/963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",
+            },
+            "events": [],
+            "variants": ["Half Me"],
+            "status": BandStatus.ACTIVE,
+        }
 
         # Add a new favorite (Half Me is not in the mock_config_entry)
         await add_favorite(
@@ -121,18 +131,25 @@ async def test_add_favorite_with_entity_manager(
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
-        patch(
-            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
-        ) as mock_fetch_ldjson,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
-        mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
-        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
+        mock_fetch_external.return_value = {
+            "artist_data": HALF_ME_COMPLETE_RESPONSE,
+            "relation_links": {
+                "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
+                "bandsintown_url": "https://www.bandsintown.com/a/15548431",
+                "discogs_url": "https://www.discogs.com/artist/12559079",
+                "songkick_url": "https://www.songkick.com/artists/10118274",
+                "musicbrainz_url": "https://musicbrainz.org/artist/963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",
+            },
+            "events": [],
+            "variants": ["Half Me"],
+            "status": BandStatus.ACTIVE,
+        }
 
         # Add a new favorite
         await add_favorite(
@@ -204,21 +221,25 @@ async def test_add_favorite_unicode_handling(
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
-        patch(
-            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
-        ) as mock_fetch_ldjson,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
-        # Use Iron Maiden fixture which includes unicode aliases
-        mock_client.get_artist_by_id = AsyncMock(
-            return_value=IRON_MAIDEN_COMPLETE_RESPONSE
-        )
-        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
+        mock_fetch_external.return_value = {
+            "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+            "relation_links": {
+                "allmusic_url": "https://www.allmusic.com/artist/mn0000098465",
+                "bandsintown_url": "https://www.bandsintown.com/a/1301",
+                "discogs_url": "https://www.discogs.com/artist/251595",
+                "songkick_url": "https://www.songkick.com/artists/438390",
+                "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            },
+            "events": [],
+            "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+            "status": BandStatus.ACTIVE,
+        }
 
         # Add a favorite with unicode data (using different ID not in mock_config_entry)
         await add_favorite(
@@ -415,20 +436,25 @@ async def test_add_favorite_with_aliases(hass: HomeAssistant) -> None:
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
-        patch(
-            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
-        ) as mock_fetch_ldjson,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
-        mock_client.get_artist_by_id = AsyncMock(
-            return_value=IRON_MAIDEN_COMPLETE_RESPONSE
-        )
-        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
+        mock_fetch_external.return_value = {
+            "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+            "relation_links": {
+                "allmusic_url": "https://www.allmusic.com/artist/mn0000098465",
+                "bandsintown_url": "https://www.bandsintown.com/a/1301",
+                "discogs_url": "https://www.discogs.com/artist/251595",
+                "songkick_url": "https://www.songkick.com/artists/438390",
+                "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+            },
+            "events": [],
+            "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+            "status": BandStatus.ACTIVE,
+        }
 
         await add_favorite(
             hass,
@@ -464,18 +490,25 @@ async def test_add_favorite_empty_favorites(hass: HomeAssistant) -> None:
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
-        patch(
-            "homeassistant.components.music_favorites.models.fetch_and_extract_ldjson"
-        ) as mock_fetch_ldjson,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
-        mock_client.get_artist_by_id = AsyncMock(return_value=HALF_ME_COMPLETE_RESPONSE)
-        mock_fetch_ldjson.return_value = []  # Return empty list for LD+JSON data
+        mock_fetch_external.return_value = {
+            "artist_data": HALF_ME_COMPLETE_RESPONSE,
+            "relation_links": {
+                "allmusic_url": "https://www.allmusic.com/artist/mn0004372703",
+                "bandsintown_url": "https://www.bandsintown.com/a/15548431",
+                "discogs_url": "https://www.discogs.com/artist/12559079",
+                "songkick_url": "https://www.songkick.com/artists/10118274",
+                "musicbrainz_url": "https://musicbrainz.org/artist/963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec",
+            },
+            "events": [],
+            "variants": ["Half Me"],
+            "status": BandStatus.ACTIVE,
+        }
 
         # Add first favorite
         await add_favorite(
@@ -746,12 +779,9 @@ async def test_add_favorite_musicbrainz_error(
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.music_favorites.models.MusicBrainzClient"
-    ) as mock_client_class:
-        mock_client = mock_client_class.return_value
-        mock_client.get_artist_by_id = AsyncMock(
-            side_effect=MusicBrainzError("API error")
-        )
+        "homeassistant.components.music_favorites.models.fetch_external_data"
+    ) as mock_fetch_external:
+        mock_fetch_external.side_effect = MusicBrainzError("API error")
 
         # Should raise ServiceValidationError with proper message
         with pytest.raises(
@@ -772,20 +802,27 @@ async def test_add_favorite_no_entity_manager(
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        # Mock successful MusicBrainz response
-        mock_client = mock_client_class.return_value
-        mock_client.get_artist_by_id = AsyncMock(
-            return_value={
-                "name": "Test Band",
-                "aliases": [{"name": "Test Alias"}],
-            }
-        )
+        # Mock successful response
+        test_band_data = {
+            "id": "abcdef12-3456-7890-abcd-123456789def",
+            "name": "Test Band",
+            "aliases": [{"name": "Test Alias"}],
+        }
+        mock_fetch_external.return_value = {
+            "artist_data": test_band_data,
+            "relation_links": {
+                "musicbrainz_url": "https://musicbrainz.org/artist/abcdef12-3456-7890-abcd-123456789def",
+            },
+            "events": [],
+            "variants": ["Test Band", "Test Alias"],
+            "status": BandStatus.ACTIVE,
+        }
 
         # Should add favorite but warn about missing entity manager
         await add_favorite(hass, mock_config_entry, "test-musicbrainz-id")
@@ -837,7 +874,10 @@ def test_determine_band_status_reformed_ended_to_false() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+        current_artist_data,
+        events_data,
+        {"status": BandStatus.DISBANDED},
+        previous_artist_data,
     )
     assert status == BandStatus.REFORMED
 
@@ -856,7 +896,10 @@ def test_determine_band_status_reformed_end_date_removed() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+        current_artist_data,
+        events_data,
+        {"status": BandStatus.DISBANDED},
+        previous_artist_data,
     )
     assert status == BandStatus.REFORMED
 
@@ -876,7 +919,10 @@ def test_determine_band_status_reformed_maintained_for_period() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        artist_data, events_data, BandStatus.REFORMED, None, reformed_date
+        artist_data,
+        events_data,
+        {"status": BandStatus.REFORMED, "reformed_date": reformed_date},
+        None,
     )
     assert status == BandStatus.REFORMED
 
@@ -896,7 +942,10 @@ def test_determine_band_status_reformed_period_expired() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        artist_data, events_data, BandStatus.REFORMED, None, reformed_date
+        artist_data,
+        events_data,
+        {"status": BandStatus.REFORMED, "reformed_date": reformed_date},
+        None,
     )
     assert status == BandStatus.DISBANDED
 
@@ -915,7 +964,10 @@ def test_determine_band_status_reformed_invalid_date() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        artist_data, events_data, BandStatus.REFORMED, None, reformed_date
+        artist_data,
+        events_data,
+        {"status": BandStatus.REFORMED, "reformed_date": reformed_date},
+        None,
     )
     # Should fall back to normal logic (DISBANDED since ended=true)
     assert status == BandStatus.DISBANDED
@@ -931,7 +983,9 @@ def test_determine_band_status_no_previous_data() -> None:
 
     events_data: list[dict[str, Any]] = []
 
-    status = determine_band_status(artist_data, events_data, BandStatus.DISBANDED, None)
+    status = determine_band_status(
+        artist_data, events_data, {"status": BandStatus.DISBANDED}, None
+    )
     assert status == BandStatus.DISBANDED
 
 
@@ -951,7 +1005,10 @@ def test_determine_band_status_no_reformation_signals() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+        current_artist_data,
+        events_data,
+        {"status": BandStatus.DISBANDED},
+        previous_artist_data,
     )
     assert status == BandStatus.DISBANDED
 
@@ -973,7 +1030,10 @@ def test_determine_band_status_the_kinks_scenario() -> None:
     events_data: list[dict[str, Any]] = []
 
     status = determine_band_status(
-        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+        current_artist_data,
+        events_data,
+        {"status": BandStatus.DISBANDED},
+        previous_artist_data,
     )
     # Should remain DISBANDED, NOT become REFORMED
     assert status == BandStatus.DISBANDED
@@ -1014,7 +1074,10 @@ def test_determine_band_status_reformed_with_events() -> None:
     events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
 
     status = determine_band_status(
-        current_artist_data, events_data, BandStatus.DISBANDED, previous_artist_data
+        current_artist_data,
+        events_data,
+        {"status": BandStatus.DISBANDED},
+        previous_artist_data,
     )
     # Should return REFORMED, not ON_TOUR, because reformation takes precedence
     assert status == BandStatus.REFORMED
@@ -1206,22 +1269,29 @@ async def test_add_favorite_includes_status_active(hass: HomeAssistant) -> None:
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
         # Mock active band (no end date)
-        mock_client.get_artist_by_id = AsyncMock(
-            return_value={
-                "name": "Active Band",
-                "aliases": [],
-                "life-span": {"begin": "2000"},  # No end date = active
-                "relations": [],
-            }
-        )
+        active_band_data = {
+            "id": "12345678-1234-5678-9abc-123456789abc",
+            "name": "Active Band",
+            "aliases": [],
+            "life-span": {"begin": "2000"},  # No end date = active
+            "relations": [],
+        }
+        mock_fetch_external.return_value = {
+            "artist_data": active_band_data,
+            "relation_links": {
+                "musicbrainz_url": "https://musicbrainz.org/artist/12345678-1234-5678-9abc-123456789abc",
+            },
+            "events": [],
+            "variants": ["Active Band"],
+            "status": BandStatus.ACTIVE,
+        }
 
         await add_favorite(hass, entry, "active-band-id")
 
@@ -1246,25 +1316,32 @@ async def test_add_favorite_includes_status_disbanded(hass: HomeAssistant) -> No
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
         # Mock disbanded band (has end date)
-        mock_client.get_artist_by_id = AsyncMock(
-            return_value={
-                "name": "Disbanded Band",
-                "aliases": [],
-                "life-span": {
-                    "begin": "2000",
-                    "end": "2020",
-                },  # Has end date = disbanded
-                "relations": [],
-            }
-        )
+        disbanded_band_data = {
+            "id": "deadbeef-1234-5678-90ab-cdef12345678",
+            "name": "Disbanded Band",
+            "aliases": [],
+            "life-span": {
+                "begin": "2000",
+                "end": "2020",
+            },  # Has end date = disbanded
+            "relations": [],
+        }
+        mock_fetch_external.return_value = {
+            "artist_data": disbanded_band_data,
+            "relation_links": {
+                "musicbrainz_url": "https://musicbrainz.org/artist/deadbeef-1234-5678-90ab-cdef12345678",
+            },
+            "events": [],
+            "variants": ["Disbanded Band"],
+            "status": BandStatus.DISBANDED,
+        }
 
         await add_favorite(hass, entry, "disbanded-band-id")
 
@@ -1289,26 +1366,33 @@ async def test_add_favorite_deduplicates_variants(hass: HomeAssistant) -> None:
     with (
         patch.object(hass.config_entries, "async_update_entry") as mock_update,
         patch(
-            "homeassistant.components.music_favorites.models.MusicBrainzClient"
-        ) as mock_client_class,
+            "homeassistant.components.music_favorites.models.fetch_external_data"
+        ) as mock_fetch_external,
         patch(
             "homeassistant.components.music_favorites.models.update_filtered_calendar_cache"
         ),
     ):
-        mock_client = mock_client_class.return_value
         # Mock artist where name "Asphyx" appears in both name and aliases (common MusicBrainz case)
-        mock_client.get_artist_by_id = AsyncMock(
-            return_value={
-                "name": "Asphyx",
-                "aliases": [
-                    {"name": "Asphyx"},  # Duplicate of main name
-                    {"name": "Asphyx"},  # Another duplicate
-                    {"name": "Soulburn"},  # Different alias
-                ],
-                "life-span": {"begin": "1987"},
-                "relations": [],
-            }
-        )
+        asphyx_data = {
+            "id": "cafebabe-1337-4567-89ab-0123456789cd",
+            "name": "Asphyx",
+            "aliases": [
+                {"name": "Asphyx"},  # Duplicate of main name
+                {"name": "Asphyx"},  # Another duplicate
+                {"name": "Soulburn"},  # Different alias
+            ],
+            "life-span": {"begin": "1987"},
+            "relations": [],
+        }
+        mock_fetch_external.return_value = {
+            "artist_data": asphyx_data,
+            "relation_links": {
+                "musicbrainz_url": "https://musicbrainz.org/artist/cafebabe-1337-4567-89ab-0123456789cd",
+            },
+            "events": [],
+            "variants": ["Asphyx", "Soulburn"],
+            "status": BandStatus.ACTIVE,
+        }
 
         await add_favorite(hass, entry, "asphyx-test-id")
 
@@ -1336,6 +1420,11 @@ async def test_add_favorite_bandsintown_ldjson_error(
         data={"favorites": {}},
     )
     test_entry.add_to_hass(hass)
+
+    # Set up runtime_data with MusicBrainz client (needed for fetch_external_data)
+    test_entry.runtime_data = {
+        "musicbrainz_client": MusicBrainzClient(hass),
+    }
 
     # Use Half Me fixture (has real Bandsintown URL)
     half_me_id = "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
@@ -1632,6 +1721,11 @@ async def test_add_favorite_with_ldjson_events(
         unique_id="music_favorites",
     )
     test_entry.add_to_hass(hass)
+
+    # Set up runtime_data with MusicBrainz client (needed for fetch_external_data)
+    test_entry.runtime_data = {
+        "musicbrainz_client": MusicBrainzClient(hass),
+    }
 
     half_me_id = "963fa0ee-ceeb-4dbb-abcf-6b85cdc0a3ec"
 

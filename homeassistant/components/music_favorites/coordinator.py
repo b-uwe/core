@@ -9,12 +9,11 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .bandsintown import extract_music_events
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 from .datatypes import MusicFavoritesConfigEntry
-from .ldjson import LdJsonError, fetch_and_extract_ldjson
-from .models import BandStatus, determine_band_status, extract_pure_event_data
-from .musicbrainz import MusicBrainzClient, MusicBrainzError, extract_relation_links
+from .ldjson import LdJsonError
+from .models import BandStatus, fetch_external_data
+from .musicbrainz import MusicBrainzClient, MusicBrainzError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -266,14 +265,29 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         updated_data = current_data.copy()
         data_changed = False
         artist_data = None
+        new_status = None
 
-        # Step 1: Update MusicBrainz data (artist info, relations)
         try:
             _LOGGER.debug("Fetching MusicBrainz data for %s", favorite_name)
-            artist_data = await self.musicbrainz_client.get_artist_by_id(musicbrainz_id)
+
+            # Fetch complete external data (artist data + relation links + events + variants + status)
+            external_data = await fetch_external_data(
+                self.hass, self.entry, musicbrainz_id, current_data
+            )
+            artist_data = external_data["artist_data"]
+            new_relation_links = external_data["relation_links"]
+            new_events_data = external_data["events"]
+            new_variants = external_data["variants"]
+            new_status = external_data["status"]
+
+            # Update variants (artist name and aliases)
+            current_variants = current_data.get("variants", [])
+            if new_variants != current_variants:
+                updated_data["variants"] = new_variants
+                data_changed = True
+                _LOGGER.debug("Updated variants for %s", favorite_name)
 
             # Update relation links
-            new_relation_links = extract_relation_links(artist_data)
             current_relation_links = {
                 k: v for k, v in current_data.items() if k.endswith("_url")
             }
@@ -284,12 +298,28 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     if key.endswith("_url"):
                         del updated_data[key]
                 updated_data.update(new_relation_links)
-                # Always add musicbrainz_url (constructed from ID)
-                updated_data["musicbrainz_url"] = (
-                    f"https://musicbrainz.org/artist/{musicbrainz_id}"
-                )
                 data_changed = True
                 _LOGGER.debug("Updated relation links for %s", favorite_name)
+
+            # Step 2: Update events data
+            current_events = current_data.get("events", [])
+
+            if new_events_data != current_events:
+                updated_data["events"] = new_events_data
+                data_changed = True
+                _LOGGER.debug(
+                    "Updated %d events for %s",
+                    len(new_events_data),
+                    favorite_name,
+                )
+
+                # Fire individual events for each change
+                self._fire_event_changes(
+                    musicbrainz_id,
+                    favorite_name,
+                    current_events,
+                    new_events_data,
+                )
 
         except MusicBrainzError as err:
             _LOGGER.warning(
@@ -297,59 +327,13 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             )
         except Exception:
             _LOGGER.exception(
-                "Unexpected error fetching MusicBrainz data for %s", favorite_name
+                "Unexpected error fetching external data for %s", favorite_name
             )
 
-        # Step 2: Update Bandsintown events data if we have a Bandsintown URL
-        bandsintown_url = updated_data.get("bandsintown_url")
-        if bandsintown_url:
-            try:
-                _LOGGER.debug("Fetching Bandsintown data for %s", favorite_name)
-                ldjson_data = await fetch_and_extract_ldjson(self.hass, bandsintown_url)
-                music_events = extract_music_events(ldjson_data)
-
-                if music_events:
-                    # Extract pure date and time data for storage
-                    new_events_data = extract_pure_event_data(music_events)
-                    current_events = current_data.get("events", [])
-
-                    if new_events_data != current_events:
-                        updated_data["events"] = new_events_data
-                        data_changed = True
-                        _LOGGER.debug(
-                            "Updated %d events for %s",
-                            len(new_events_data),
-                            favorite_name,
-                        )
-
-                        # Fire individual events for each change
-                        self._fire_event_changes(
-                            musicbrainz_id,
-                            favorite_name,
-                            current_events,
-                            new_events_data,
-                        )
-
-            except LdJsonError as err:
-                _LOGGER.warning(
-                    "Failed to update Bandsintown events for %s: %s", favorite_name, err
-                )
-
-        # Step 3: Update band status
+        # Step 3: Update band status (calculated in fetch_external_data)
         if artist_data:
             try:
                 current_status = current_data.get("status")
-                events_data = updated_data.get("events", [])
-                previous_artist_data = current_data.get("previous_artist_data")
-                reformed_date = current_data.get("reformed_date")
-
-                new_status = determine_band_status(
-                    artist_data,
-                    events_data,
-                    current_status,
-                    previous_artist_data,
-                    reformed_date,
-                )
 
                 if new_status != current_status:
                     updated_data["status"] = new_status

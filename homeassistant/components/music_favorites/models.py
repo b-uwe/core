@@ -104,11 +104,10 @@ def extract_pure_event_data(
 def determine_band_status(
     artist_data: dict[str, Any],
     events_data: list[dict[str, Any]] | None = None,
-    previous_status: BandStatus | None = None,
+    current_data: dict[str, Any] | None = None,
     previous_artist_data: dict[str, Any] | None = None,
-    reformed_date: str | None = None,
 ) -> BandStatus:
-    """Determine the current status of a band based on MusicBrainz and events data.
+    """Determine band status with full context for both new and existing favorites.
 
     This function implements the business logic for determining band status by analyzing
     MusicBrainz life-span data and upcoming events from Bandsintown. Status changes
@@ -124,9 +123,8 @@ def determine_band_status(
     Args:
         artist_data: Current artist data from MusicBrainz API containing life-span information
         events_data: Optional list of upcoming events from Bandsintown for tour status
-        previous_status: Optional previous status for detecting status transitions
+        current_data: Optional existing favorite data for status context
         previous_artist_data: Optional previous artist data for comparing MusicBrainz changes
-        reformed_date: Optional ISO date string when REFORMED status was first set
 
     Returns:
         BandStatus: Enum value representing current band status (affects UI display)
@@ -139,6 +137,10 @@ def determine_band_status(
         - TOUR_PLANNED: Events within next 180 days
         - ACTIVE: Default status for active bands without tour activity
     """
+    # Extract context from current data if available
+    previous_status = current_data.get("status") if current_data else None
+    reformed_date = current_data.get("reformed_date") if current_data else None
+
     today = date.today()
     current_life_span = artist_data.get("life-span", {})
     current_ended = current_life_span.get("ended", False)
@@ -188,6 +190,109 @@ def determine_band_status(
 
     # Default to active
     return BandStatus.ACTIVE
+
+
+async def fetch_external_data(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    musicbrainz_id: str,
+    current_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fetch complete external data including artist data, relation links, events, variants and status.
+
+    This function consolidates ALL external API data fetching into a single call,
+    fetching artist data from MusicBrainz, building relation links, getting
+    events from Bandsintown if available, processing artist variants/aliases, and
+    determining band status.
+
+    Args:
+        hass: Home Assistant instance for API calls
+        entry: Config entry containing runtime_data with shared MusicBrainz client
+        musicbrainz_id: MusicBrainz artist ID to fetch data for
+        current_data: Optional existing favorite data for status context (used by coordinator)
+
+    Returns:
+        dict: Complete external data with keys:
+            - "artist_data": MusicBrainz artist data
+            - "relation_links": Dictionary of relation URLs including musicbrainz_url
+            - "events": List of events data from Bandsintown or empty list
+            - "variants": List of deduplicated artist variants (name + aliases)
+            - "status": Determined band status based on life-span and events
+
+    Raises:
+        MusicBrainzError: When MusicBrainz API fails
+    """
+    # Use shared MusicBrainz client from runtime_data
+    musicbrainz_client = entry.runtime_data["musicbrainz_client"]
+    artist_data = await musicbrainz_client.get_artist_by_id(musicbrainz_id)
+    artist_name = artist_data["name"]
+
+    # Extract name and aliases from MusicBrainz response (moved from add_favorite)
+    aliases = [
+        alias.get("name", "")
+        for alias in artist_data.get("aliases", [])
+        if alias.get("name")  # Only include non-empty alias names
+    ]
+
+    # Deduplicate variants using a set while preserving order (name first)
+    variants_set = {artist_name}
+    variants = [artist_name]
+
+    if aliases:
+        for alias in aliases:
+            if alias not in variants_set:
+                variants_set.add(alias)
+                variants.append(alias)
+
+    # Build relation links from artist data (merged from build_relation_links_data)
+    relation_links = extract_relation_links(artist_data)
+    relation_links["musicbrainz_url"] = (
+        f"https://musicbrainz.org/artist/{artist_data['id']}"
+    )
+
+    # Initialize events data - will be populated from Bandsintown if available
+    events_data: list[dict[str, Any]] = []
+
+    # Extract LD+JSON data from Bandsintown URL if available
+    bandsintown_url = relation_links.get("bandsintown_url")
+    if bandsintown_url:
+        _LOGGER.debug(
+            "Found Bandsintown URL, extracting LD+JSON data: %s", bandsintown_url
+        )
+        try:
+            # Fetching the Bandsintown page and extract the LD+JSON objects
+            ldjson_data = await fetch_and_extract_ldjson(hass, bandsintown_url)
+
+            # Parse MusicEvents
+            music_events = extract_music_events(ldjson_data)
+            if music_events:
+                # Extract pure date and time data for storage
+                events_data = extract_pure_event_data(music_events)
+
+            _LOGGER.debug(
+                "Extracted %d LD+JSON objects from Bandsintown", len(ldjson_data)
+            )
+
+        except LdJsonError as err:
+            _LOGGER.warning("Failed to extract LD+JSON from Bandsintown: %s", err)
+    else:
+        _LOGGER.debug("No Bandsintown URL found for artist %s", artist_name)
+
+    # Determine band status with events data and context (moved from add_favorite and coordinator)
+    previous_artist_data = (
+        current_data.get("previous_artist_data") if current_data else None
+    )
+    band_status = determine_band_status(
+        artist_data, events_data, current_data, previous_artist_data
+    )
+
+    return {
+        "artist_data": artist_data,
+        "relation_links": relation_links,
+        "events": events_data,
+        "variants": variants,
+        "status": band_status,
+    }
 
 
 def get_tour_status(events_data: list[dict[str, Any]]) -> BandStatus | None:
@@ -313,76 +418,28 @@ async def add_favorite(
             f"Favorite with MusicBrainz ID {musicbrainz_id} already exists"
         )
 
-    # Fetch complete artist data from MusicBrainz (sequential calls to be nice to their servers)
-    client = MusicBrainzClient(hass)
+    # Fetch complete external data (artist data + relation links + events)
     try:
-        artist_data = await client.get_artist_by_id(musicbrainz_id)
+        external_data = await fetch_external_data(hass, entry, musicbrainz_id)
     except MusicBrainzError as err:
         _LOGGER.error("Failed to fetch artist data for %s: %s", musicbrainz_id, err)
         raise ServiceValidationError(
             f"Could not fetch artist data from MusicBrainz: {err}"
         ) from err
 
-    # Extract name and aliases from MusicBrainz response
-    name = artist_data["name"]
-    aliases = [
-        alias.get("name", "")
-        for alias in artist_data.get("aliases", [])
-        if alias.get("name")  # Only include non-empty alias names
-    ]
-
-    # Extract relation links
-    relation_links = extract_relation_links(artist_data)
-
-    # Initialize events data - will be populated from Bandsintown if available
-    events_data: list[dict[str, Any]] = []
-
-    # Extract LD+JSON data from Bandsintown URL if available
-    bandsintown_url = relation_links.get("bandsintown_url")
-    if bandsintown_url:
-        _LOGGER.debug(
-            "Found Bandsintown URL, extracting LD+JSON data: %s", bandsintown_url
-        )
-        try:
-            # Fetching the Bandsintown page and extract the LD+JSON objects
-            ldjson_data = await fetch_and_extract_ldjson(hass, bandsintown_url)
-
-            # Parse MusicEvents
-            music_events = extract_music_events(ldjson_data)
-            if music_events:
-                # Extract pure date and time data for storage
-                events_data = extract_pure_event_data(music_events)
-
-            _LOGGER.debug(
-                "Extracted %d LD+JSON objects from Bandsintown", len(ldjson_data)
-            )
-
-        except LdJsonError as err:
-            _LOGGER.warning("Failed to extract LD+JSON from Bandsintown: %s", err)
-    else:
-        _LOGGER.debug("No Bandsintown URL found for artist %s", name)
-
-    # Determine band status with events data (no previous data on initial add)
-    band_status = determine_band_status(artist_data, events_data)
-
-    # Add new favorite with name, aliases, and relation links from MusicBrainz
-    # Deduplicate variants using a set while preserving order (name first)
-    variants_set = {name}
-    favorite_variants = [name]
-
-    if aliases:
-        for alias in aliases:
-            if alias not in variants_set:
-                variants_set.add(alias)
-                favorite_variants.append(alias)
+    # Extract data from comprehensive response
+    artist_data = external_data["artist_data"]
+    relation_links = external_data["relation_links"]
+    events_data = external_data["events"]
+    favorite_variants = external_data["variants"]  # Use processed variants
+    band_status = external_data["status"]  # Use calculated status
 
     # Store variants, status, events, and flatten relation links directly into the data structure
     favorite_data = {
         "variants": favorite_variants,
         "status": band_status,
         "events": events_data,  # Store events data with the act
-        "musicbrainz_url": f"https://musicbrainz.org/artist/{musicbrainz_id}",
-        **relation_links,  # Flatten relation links  into the object
+        **relation_links,  # Flatten relation links including musicbrainz_url into the object
     }
     current_favorites[musicbrainz_id] = favorite_data
 
@@ -407,7 +464,7 @@ async def add_favorite(
             "No runtime_data available - new entity will not be created immediately"
         )
 
-    _LOGGER.info("Successfully added favorite: %s", name)
+    _LOGGER.info("Successfully added favorite: %s", artist_data["name"])
 
     # Update filtered calendar cache after adding favorite
     await update_filtered_calendar_cache(hass, entry)

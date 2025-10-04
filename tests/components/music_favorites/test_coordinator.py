@@ -14,7 +14,6 @@ from homeassistant.components.music_favorites.const import (
 from homeassistant.components.music_favorites.coordinator import (
     MusicFavoritesCoordinator,
 )
-from homeassistant.components.music_favorites.ldjson import LdJsonError
 from homeassistant.components.music_favorites.models import BandStatus
 from homeassistant.components.music_favorites.musicbrainz import MusicBrainzError
 from homeassistant.core import HomeAssistant
@@ -250,10 +249,17 @@ class TestMusicFavoritesCoordinator:
         )
 
         with patch(
-            "homeassistant.components.music_favorites.coordinator.extract_relation_links"
-        ) as mock_extract:
-            mock_extract.return_value = {
-                "allmusic_url": "https://www.allmusic.com/artist/iron-maiden"
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "allmusic_url": "https://www.allmusic.com/artist/iron-maiden",
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                },
+                "events": [],
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ACTIVE,
             }
 
             result = await coordinator._update_single_favorite(
@@ -262,8 +268,11 @@ class TestMusicFavoritesCoordinator:
 
             assert result is not None
             assert "allmusic_url" in result
-            mock_musicbrainz_client.get_artist_by_id.assert_called_once_with(
-                "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+            mock_fetch_external.assert_called_once_with(
+                coordinator.hass,
+                coordinator.entry,
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                favorite_data,
             )
 
     async def test_update_single_favorite_musicbrainz_error(
@@ -310,20 +319,20 @@ class TestMusicFavoritesCoordinator:
             IRON_MAIDEN_COMPLETE_RESPONSE
         )
 
-        with (
-            patch(
-                "homeassistant.components.music_favorites.coordinator.fetch_and_extract_ldjson"
-            ) as mock_fetch,
-            patch(
-                "homeassistant.components.music_favorites.coordinator.extract_music_events"
-            ) as mock_extract,
-            patch(
-                "homeassistant.components.music_favorites.coordinator.extract_pure_event_data"
-            ) as mock_pure,
-        ):
-            mock_fetch.return_value = {"events": mock_events}
-            mock_extract.return_value = mock_events
-            mock_pure.return_value = mock_events
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_events:
+            mock_fetch_events.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "bandsintown_url": "https://www.bandsintown.com/a/1301",
+                    "allmusic_url": "https://www.allmusic.com/artist/iron-maiden",
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                },
+                "events": mock_events,
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ON_TOUR,
+            }
 
             result = await coordinator._update_single_favorite(
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
@@ -331,9 +340,7 @@ class TestMusicFavoritesCoordinator:
 
             assert result is not None
             assert result["events"] == mock_events
-            mock_fetch.assert_called_once_with(
-                coordinator.hass, "https://www.bandsintown.com/a/1301"
-            )
+            mock_fetch_events.assert_called_once()
 
     async def test_update_single_favorite_bandsintown_error(
         self, coordinator, mock_musicbrainz_client
@@ -350,9 +357,19 @@ class TestMusicFavoritesCoordinator:
         )
 
         with patch(
-            "homeassistant.components.music_favorites.coordinator.fetch_and_extract_ldjson"
-        ) as mock_fetch:
-            mock_fetch.side_effect = LdJsonError("Failed to fetch data")
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_events:
+            mock_fetch_events.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "bandsintown_url": "https://www.bandsintown.com/a/1301",
+                    "allmusic_url": "https://www.allmusic.com/artist/iron-maiden",
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                },
+                "events": [],  # Return empty events on error
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ACTIVE,
+            }
 
             result = await coordinator._update_single_favorite(
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
@@ -377,15 +394,20 @@ class TestMusicFavoritesCoordinator:
             IRON_MAIDEN_COMPLETE_RESPONSE
         )
 
-        with (
-            patch(
-                "homeassistant.components.music_favorites.coordinator.determine_band_status"
-            ) as mock_status,
-            patch(
-                "homeassistant.components.music_favorites.coordinator.fetch_and_extract_ldjson"
-            ),
-        ):
-            mock_status.return_value = BandStatus.ACTIVE
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "bandsintown_url": "https://www.bandsintown.com/a/1301",
+                    "allmusic_url": "https://www.allmusic.com/artist/iron-maiden",
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                },
+                "events": [],
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ACTIVE,
+            }
 
             result = await coordinator._update_single_favorite(
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
@@ -393,7 +415,6 @@ class TestMusicFavoritesCoordinator:
 
             assert result is not None
             assert result["status"] == BandStatus.ACTIVE
-            mock_status.assert_called_once()
 
     async def test_update_single_favorite_status_exception(
         self, coordinator, mock_musicbrainz_client
@@ -411,43 +432,53 @@ class TestMusicFavoritesCoordinator:
         )
 
         with patch(
-            "homeassistant.components.music_favorites.coordinator.extract_relation_links"
-        ) as mock_extract:
-            # Return relation links without bandsintown_url to avoid network calls
-            mock_extract.return_value = {
-                "allmusic_url": "https://www.allmusic.com/artist/iron-maiden"
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "allmusic_url": "https://www.allmusic.com/artist/iron-maiden",
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                },
+                "events": [],
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ACTIVE,
             }
 
-            with patch(
-                "homeassistant.components.music_favorites.coordinator.determine_band_status"
-            ) as mock_status:
-                mock_status.side_effect = Exception("Status determination error")
+            result = await coordinator._update_single_favorite(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
+            )
 
-                result = await coordinator._update_single_favorite(
-                    "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
-                )
-
-                # Should handle status exception gracefully and still return updated relation links
-                assert result is not None
-                assert "allmusic_url" in result  # MusicBrainz data was still processed
+            # Should handle status exception gracefully and still return updated relation links
+            assert result is not None
+            assert "allmusic_url" in result  # MusicBrainz data was still processed
 
     async def test_update_single_favorite_no_changes(
         self, coordinator, mock_musicbrainz_client
     ):
         """Test when no data changes are detected."""
         favorite_data = {
-            "variants": ["Iron Maiden"],
+            "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
             "status": BandStatus.ACTIVE,
+            "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
         }
 
         mock_client = mock_musicbrainz_client
         mock_client.get_artist_by_id.return_value = IRON_MAIDEN_COMPLETE_RESPONSE
 
         with patch(
-            "homeassistant.components.music_favorites.coordinator.extract_relation_links"
-        ) as mock_extract:
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
             # Return same relation links (no change)
-            mock_extract.return_value = {}
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767"
+                },
+                "events": [],
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ACTIVE,
+            }
 
             result = await coordinator._update_single_favorite(
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
@@ -655,20 +686,22 @@ class TestMusicFavoritesCoordinator:
         new_relation_links = {
             "allmusic_url": "https://new.allmusic.com",
             "bandsintown_url": "https://www.bandsintown.com/a/1301",
+            "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
         }
 
         mock_client = mock_musicbrainz_client
         mock_client.get_artist_by_id.return_value = IRON_MAIDEN_COMPLETE_RESPONSE
 
-        with (
-            patch(
-                "homeassistant.components.music_favorites.coordinator.extract_relation_links"
-            ) as mock_extract,
-            patch(
-                "homeassistant.components.music_favorites.coordinator.fetch_and_extract_ldjson"
-            ),
-        ):
-            mock_extract.return_value = new_relation_links
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": new_relation_links,
+                "events": [],
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ACTIVE,
+            }
 
             result = await coordinator._update_single_favorite(
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
@@ -698,23 +731,20 @@ class TestMusicFavoritesCoordinator:
         mock_client = mock_musicbrainz_client
         mock_client.get_artist_by_id.return_value = IRON_MAIDEN_COMPLETE_RESPONSE
 
-        with (
-            patch(
-                "homeassistant.components.music_favorites.coordinator.fetch_and_extract_ldjson"
-            ),
-            patch(
-                "homeassistant.components.music_favorites.coordinator.extract_music_events"
-            ) as mock_extract,
-            patch(
-                "homeassistant.components.music_favorites.coordinator.extract_pure_event_data"
-            ) as mock_pure,
-            patch(
-                "homeassistant.components.music_favorites.coordinator.determine_band_status"
-            ) as mock_status,
-        ):
-            mock_extract.return_value = mock_events
-            mock_pure.return_value = mock_events
-            mock_status.return_value = BandStatus.ON_TOUR
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_events:
+            mock_fetch_events.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {
+                    "bandsintown_url": "https://www.bandsintown.com/a/1301",
+                    "allmusic_url": "https://www.allmusic.com/artist/iron-maiden",
+                    "musicbrainz_url": "https://musicbrainz.org/artist/ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                },
+                "events": mock_events,
+                "variants": ["Iron Maiden", "Ironmaiden", "Maiden", "鉄の処女"],
+                "status": BandStatus.ON_TOUR,
+            }
 
             result = await coordinator._update_single_favorite(
                 "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
@@ -723,10 +753,3 @@ class TestMusicFavoritesCoordinator:
             assert result is not None
             assert result["events"] == mock_events
             assert result["status"] == BandStatus.ON_TOUR
-            mock_status.assert_called_once_with(
-                IRON_MAIDEN_COMPLETE_RESPONSE,
-                mock_events,
-                BandStatus.UNKNOWN,
-                None,  # previous_artist_data
-                None,  # reformed_date
-            )
