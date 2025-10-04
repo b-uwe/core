@@ -22,7 +22,7 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def _test_connectivity_and_create_entry(self) -> ConfigFlowResult:
+    async def _create_config_entry(self) -> ConfigFlowResult:
         """Create config entry with default settings.
 
         This shared method handles the core logic for both UI and YAML flows:
@@ -95,7 +95,7 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
 
         # Use shared method to create entry
-        return await self._test_connectivity_and_create_entry()
+        return await self._create_config_entry()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -140,4 +140,4 @@ class MusicFavoritesConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         # User submitted the form - use shared method to create entry
-        return await self._test_connectivity_and_create_entry()
+        return await self._create_config_entry()
