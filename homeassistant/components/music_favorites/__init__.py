@@ -49,7 +49,7 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 
-async def _init_flow(hass: HomeAssistant) -> None:
+async def _init_import_flow(hass: HomeAssistant) -> None:
     """Initialize config flow from YAML configuration.
 
     This internal helper function triggers the Home Assistant config flow system
@@ -123,7 +123,7 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
             "Creating initial Music Favorites Service to be managed from UI from there on"
         )
         # We're artificially running the Config Flow here once
-        hass.async_create_task(_init_flow(hass))
+        hass.async_create_task(_init_import_flow(hass))
 
     return True
 

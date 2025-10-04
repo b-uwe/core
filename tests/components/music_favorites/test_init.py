@@ -5,7 +5,7 @@
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
-from homeassistant.components.music_favorites import _init_flow, async_setup
+from homeassistant.components.music_favorites import _init_import_flow, async_setup
 from homeassistant.components.music_favorites.const import DOMAIN
 from homeassistant.components.music_favorites.musicbrainz import MusicBrainzError
 from homeassistant.config_entries import ConfigEntryState
@@ -165,11 +165,11 @@ async def test_runtime_data_structure(
     assert isinstance(entry.runtime_data["filtered_calendar_events"], list)
 
 
-async def test_init_flow_unknown_flow_exception(hass: HomeAssistant) -> None:
-    """Test _init_flow handles UnknownFlow exception gracefully."""
+async def test_init_import_flow_unknown_flow_exception(hass: HomeAssistant) -> None:
+    """Test _init_import_flow handles UnknownFlow exception gracefully."""
     with patch.object(hass.config_entries.flow, "async_init", side_effect=UnknownFlow):
         # This should not raise an exception - it should catch and log
-        await _init_flow(hass)
+        await _init_import_flow(hass)
 
 
 async def test_setup_entry_musicbrainz_error(hass: HomeAssistant) -> None:
