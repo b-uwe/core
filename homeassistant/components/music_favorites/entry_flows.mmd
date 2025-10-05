@@ -1,0 +1,109 @@
+flowchart TD
+    START[Home Assistant Startup]:::entry ==> CONFIG_CHECK{YAML Config Exists?}:::system_choice
+
+    %% Initial YAML Check
+    CONFIG_CHECK ==>|Yes| ASYNC_SETUP["async_setup()"]:::major_func
+
+    %% async_setup()
+    subgraph SETUP_BLOCK ["async_setup()"]
+      REGISTER_SERVICES["register_services()"]:::func
+      ENTRY_CHECK{Config Entries Exist?}
+      REGISTER_SERVICES ==> ENTRY_CHECK{Config Entries Exist?}:::system_choice
+      ENTRY_CHECK -.->|No| INIT_IMPORT_FLOW{"_init_import_flow()"}:::func
+    end
+    ASYNC_SETUP --> REGISTER_SERVICES
+
+    %% HA Import Flow Magic
+    subgraph HA_MAGIC_1_BLOCK ["HA Magic"]
+      HA_MAGIC_1("HA Magic")
+    end
+
+    INIT_IMPORT_FLOW -.-> HA_MAGIC_1
+
+    HA_MAGIC_1 -.-> ASYNC_STEP_IMPORT("async_step_import()"):::func
+
+    %% async_step_import()
+    subgraph ASYNC_STEP_IMPORT_BLOCK ["async_step_import()"]
+      ASYNC_SET_UNIQUE_ID("async_set_unique_id()"):::func
+      ASYNC_SET_UNIQUE_ID ==> IS_UNIQUE_ID{Config Entry Exists?}:::system_choice
+      IS_UNIQUE_ID -.->|No| CREATE_CONFIG_ENTRY("_create_config_entry()"):::func
+    end
+    ASYNC_STEP_IMPORT -.-> ASYNC_SET_UNIQUE_ID
+
+    %% async_create_entry()
+    subgraph ASYNC_CREATE_ENTRY_BLOCK ["async_create_entry()"]
+      ENTRY_CREATION("Config Entry Creation"):::important
+    end
+    CREATE_CONFIG_ENTRY ==> ENTRY_CREATION
+
+    %% HA Init Config Entry Block
+    subgraph HA_MAGIC_2_BLOCK ["HA Magic"]
+      HA_MAGIC_2("HA Magic")
+    end
+    ENTRY_CHECK -.->|Yes| HA_MAGIC_2
+    ENTRY_CREATION -.-> HA_MAGIC_2
+    IS_UNIQUE_ID -.->|Yes| ABORT2("Silent Abortion. Should be impossible to happen!"):::ui
+
+    HA_MAGIC_2 -.-> ASYNC_SETUP_ENTRY("async_setup_entry()"):::major_func
+
+    %% UI Flow Start
+    CONFIG_CHECK -.->|No| ENTRY_CHECK_NO_YAML{Config Entries Exist?}:::system_choice
+    ENTRY_CHECK_NO_YAML -.->|No| NOT_LOADED[Not Loaded]
+    ENTRY_CHECK_NO_YAML -.->|Yes| HA_MAGIC_3[HA Magic]
+
+    %% User Setup Flow
+    NOT_LOADED -.-o USER_SETUP
+    USER_SETUP("User sets up Music Favorites from UI"):::ui
+    USER_SETUP -.-> ASYNC_STEP_USER("async_step_user()"):::func
+
+    %% async_step_user()
+    subgraph ASYNC_STEP_USER_BLOCK ["async_step_user()"]
+      ASYNC_SET_UNIQUE_ID2("async_set_unique_id()"):::func
+      ASYNC_SET_UNIQUE_ID2 ==> IS_UNIQUE_ID2{Config Entry Exists?}:::system_choice
+      IS_UNIQUE_ID2 -.->|No| SETUP_FLOW("Simplistic Setup Flow"):::ui
+      SETUP_FLOW -.-> CREATE_CONFIG_ENTRY2("_create_config_entry()"):::func
+    end
+    ASYNC_STEP_USER -.-> ASYNC_SET_UNIQUE_ID2
+    IS_UNIQUE_ID2 -.->|Yes| ABORT("Abort Config Entry Creation with a message"):::ui
+
+    %% async_create_entry()
+    subgraph ASYNC_CREATE_ENTRY_BLOCK2 ["async_create_entry()"]
+      ENTRY_CREATION2("Config Entry Creation"):::important
+    end
+    CREATE_CONFIG_ENTRY2 ==> ENTRY_CREATION2
+    ENTRY_CREATION2  -.-> HA_MAGIC_3
+
+    subgraph HA_MAGIC_3_BLOCK ["HA Magic"]
+      HA_MAGIC_3("HA Magic")
+    end
+
+    HA_MAGIC_3 -.-> ASYNC_SETUP
+
+    %% async_setup_entry
+    subgraph SEARCH_ARTIST_BLOCK ["Connectivity Check"]
+      SEARCH_ARTISTS("musicbrainz_client.search_artists"):::func
+    end
+    ASYNC_SETUP_ENTRY -.-> SEARCH_ARTISTS
+
+    SEARCH_ARTISTS ==> INIT_UPDATE_COORDINATOR("Initialize Data Update Coordinator"):::ui
+    INIT_UPDATE_COORDINATOR ==> SET_RUNTIME_DATA("Set runtime_data"):::important
+    SET_RUNTIME_DATA -.-> ASYNC_FORWARD_ENTRY_SETUPS("async_forward_entry_setups()"):::func
+
+    %% Initialize all platforms
+
+    ASYNC_FORWARD_ENTRY_SETUPS -.-> ASYNC_ENTRY_FIRST_REFRESH("async_config_entry_first_refresh()"):::func
+    ASYNC_ENTRY_FIRST_REFRESH -.-> INIT_UPDATES("Updates get kicked off"):::important
+    ASYNC_ENTRY_FIRST_REFRESH -.-> UPDATE_FILTERED_CALENDAR_CACHE("update_filtered_calendar_cache"):::func
+    UPDATE_FILTERED_CALENDAR_CACHE ==> CAL_CACHE("Calendar Distance Filter gets applied & results get cached"):::important
+    UPDATE_FILTERED_CALENDAR_CACHE ==> DONE:::important
+
+    %% Remove flow
+    REMOVE[User Removes Entry]:::entry -.-> UNLOAD["async_unload_entry()"]:::func
+
+    %% Classes
+    classDef func fill:#fff9c4,stroke:#000,stroke-width:1px,color:#000;
+    classDef major_func fill:#fff9c4,stroke:#000,stroke-width:1px,color:#000,font-weight:bold,font-size:xxx-large;
+    classDef entry fill:#ffcdd2,stroke:#000,stroke-width:1px,color:#000;
+    classDef system_choice fill:#ffcdd2,stroke:#000,stroke-width:1px,color:#000;
+    classDef ui fill:#cdd2ff,stroke:#000,stroke-width:1px,color:#000;
+    classDef important fill:#cdffd2,stroke:#000,stroke-width:1px,color:#000;
