@@ -145,7 +145,8 @@ class DistanceFilterSelect(SelectEntity):
         if distance_filter is None:
             self._attr_current_option = "No limit"
         else:
-            self._attr_current_option = str(distance_filter)
+            # Convert to int to match format in DISTANCE_FILTER_OPTIONS (no decimal point)
+            self._attr_current_option = str(int(distance_filter))
         self._attr_icon = "mdi:map-marker-radius"
 
     @property
