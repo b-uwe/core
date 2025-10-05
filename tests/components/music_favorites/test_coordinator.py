@@ -753,3 +753,90 @@ class TestMusicFavoritesCoordinator:
             assert result is not None
             assert result["events"] == mock_events
             assert result["status"] == BandStatus.ON_TOUR
+
+    async def test_update_single_favorite_musicbrainz_error_logging(
+        self, coordinator, mock_musicbrainz_client, caplog: pytest.LogCaptureFixture
+    ):
+        """Test MusicBrainzError logging in _update_single_favorite."""
+        favorite_data = {"variants": ["Iron Maiden"]}
+
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.side_effect = MusicBrainzError("API error")
+
+            result = await coordinator._update_single_favorite(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
+            )
+
+            # Should handle MusicBrainzError and log warning
+            assert result is None
+            assert (
+                "Failed to update MusicBrainz data for Iron Maiden: API error"
+                in caplog.text
+            )
+
+    async def test_reformed_date_assignment(self, coordinator, mock_musicbrainz_client):
+        """Test reformed_date assignment when status changes to REFORMED."""
+        favorite_data = {
+            "variants": ["Iron Maiden"],
+            "status": BandStatus.ACTIVE,  # Previous status
+        }
+
+        mock_client = mock_musicbrainz_client
+        mock_client.get_artist_by_id.return_value = IRON_MAIDEN_COMPLETE_RESPONSE
+
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {},
+                "events": [],
+                "variants": ["Iron Maiden"],
+                "status": BandStatus.REFORMED,  # New status
+            }
+
+            with patch(
+                "homeassistant.components.music_favorites.coordinator.date"
+            ) as mock_date:
+                mock_date.today.return_value.isoformat.return_value = "2024-01-15"
+
+                result = await coordinator._update_single_favorite(
+                    "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
+                )
+
+                assert result is not None
+                assert result["status"] == BandStatus.REFORMED
+                assert result["reformed_date"] == "2024-01-15"
+
+    async def test_status_update_exception_handling(
+        self, coordinator, mock_musicbrainz_client, caplog: pytest.LogCaptureFixture
+    ):
+        """Test exception handling in status update section."""
+        favorite_data = {"variants": ["Iron Maiden"]}
+
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {},
+                "events": [],
+                "variants": ["Iron Maiden"],
+                "status": BandStatus.REFORMED,  # This will trigger the reformed_date code
+            }
+
+            # Patch date.today() to cause an exception during reformed_date assignment
+            with patch(
+                "homeassistant.components.music_favorites.coordinator.date"
+            ) as mock_date:
+                mock_date.today.side_effect = Exception("Date error")
+
+                result = await coordinator._update_single_favorite(
+                    "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
+                )
+
+                # Should handle status update exceptions gracefully
+                assert result is not None  # Still returns data but logs the exception
+                assert "Failed to update status for Iron Maiden" in caplog.text

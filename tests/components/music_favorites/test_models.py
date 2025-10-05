@@ -14,6 +14,7 @@ from homeassistant.components.music_favorites.models import (
     add_favorite,
     determine_band_status,
     extract_pure_event_data,
+    fetch_external_data,
     get_tour_status,
     remove_favorite,
     resolve_artist_from_name,
@@ -1770,3 +1771,120 @@ async def test_add_favorite_with_ldjson_events(
     assert event["event_date"] == "2025-11-25"  # From VULVODYNIA_EVENTS_LDJSON[0]
     assert event["venue_time"] == "18:00:00"
     assert "start_date" not in event
+
+
+# Additional tests for 100% coverage
+
+
+async def test_reformation_detection_end_date_removed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test reformation detection when end date is removed (covers lines 174-178)."""
+    # Previous artist data with end date (but ended=False to avoid first condition)
+    previous_artist_data = {
+        "id": "test-id",
+        "name": "Test Band",
+        "life-span": {
+            "begin": "2000",
+            "end": "2020",  # Had end date
+            "ended": False,  # Keep same ended status
+        },
+    }
+
+    # Current artist data with end date removed
+    current_artist_data = {
+        "id": "test-id",
+        "name": "Test Band",
+        "life-span": {
+            "begin": "2000",
+            # end date removed (became None)
+            "ended": False,  # Same ended status
+        },
+    }
+
+    with caplog.at_level(logging.INFO):
+        status = determine_band_status(
+            current_artist_data,
+            events_data=[],
+            current_data={},
+            previous_artist_data=previous_artist_data,
+        )
+
+    assert status == BandStatus.REFORMED
+    assert (
+        "MusicBrainz reformation detected: end date removed (2020 -> None)"
+        in caplog.text
+    )
+
+
+async def test_fetch_external_data_no_bandsintown_url(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test fetch_external_data with no Bandsintown URL (covers line 279)."""
+    # Create a mock config entry with a proper mock client
+    mock_client = AsyncMock()
+    mock_client.get_artist_by_id.return_value = {
+        "id": "test-id",
+        "name": "Test Band",
+        "aliases": [],
+        "relations": [],  # No Bandsintown relation
+        "life-span": {"begin": "2000"},
+    }
+
+    class MockEntry:
+        runtime_data = {"musicbrainz_client": mock_client}
+
+    entry = MockEntry()
+
+    with (
+        patch(
+            "homeassistant.components.music_favorites.models.extract_relation_links"
+        ) as mock_extract_links,
+        caplog.at_level(logging.DEBUG),
+    ):
+        # Set up mocks
+        mock_extract_links.return_value = {}  # No Bandsintown URL
+
+        # Call function
+        result = await fetch_external_data(hass, entry, "test-id")
+
+        # Verify the debug log was triggered
+        assert "No Bandsintown URL found for artist Test Band" in caplog.text
+        assert result["events"] == []  # Should have empty events
+
+
+async def test_fetch_external_data_with_aliases(hass: HomeAssistant) -> None:
+    """Test fetch_external_data with aliases to cover variant processing (lines 242-245)."""
+    # Create a mock config entry with a proper mock client
+    mock_client = AsyncMock()
+    mock_client.get_artist_by_id.return_value = {
+        "id": "test-id",
+        "name": "Test Band",
+        "aliases": [
+            {"name": "Test Alias 1"},
+            {"name": "Test Alias 2"},
+            {"name": ""},  # Empty alias (should be filtered out)
+            {"name": "Test Band"},  # Duplicate of main name (should be filtered out)
+        ],
+        "relations": [],
+        "life-span": {"begin": "2000"},
+    }
+
+    class MockEntry:
+        runtime_data = {"musicbrainz_client": mock_client}
+
+    entry = MockEntry()
+
+    with patch(
+        "homeassistant.components.music_favorites.models.extract_relation_links"
+    ) as mock_extract_links:
+        # Set up mocks
+        mock_extract_links.return_value = {}
+
+        # Call function
+        result = await fetch_external_data(hass, entry, "test-id")
+
+        # Verify aliases were processed correctly (covers lines 242-245)
+        expected_variants = ["Test Band", "Test Alias 1", "Test Alias 2"]
+        assert result["variants"] == expected_variants
+        assert len(result["variants"]) == 3  # Should be deduplicated
