@@ -196,10 +196,12 @@ The Music Favorites integration provides comprehensive functionality for managin
 ### **Automation and Integration Points**
 
 #### **Event System**
+- **Status Change Events**: Real-time notifications when artist status changes (Active, On Tour, Disbanded, Reformed, etc.)
+- **Concert Event Notifications**: Real-time notifications when concerts are added or removed for your favorite artists
 - **State Changes**: Entity state changes trigger automation events
 - **Service Calls**: Service execution generates trackable events
 - **Error Events**: Integration errors can trigger automation responses
-- **Custom Events**: Support for custom event generation in future versions
+- **Concert Data Updates**: Automatic monitoring of concert schedules with event firing for changes
 
 #### **Template Support**
 - **Entity Filtering**: Template support for filtering favorite entities
@@ -226,6 +228,326 @@ The Music Favorites integration provides comprehensive functionality for managin
 - **Command Recognition**: Pattern matching for add/remove operations
 - **Response Generation**: Appropriate responses to voice commands
 - **Integration Points**: Works with all Home Assistant voice assistant platforms
+
+## Events
+
+The Music Favorites integration automatically monitors concert schedules for your favorite artists and fires Home Assistant events when concerts are added or removed. This allows you to create sophisticated automations that respond to tour announcements and schedule changes.
+
+### **Status Change Events**
+
+#### **`music_favorites_status_changed`**
+
+Fired when an artist's status changes (e.g., from "Active" to "On Tour", "Disbanded" to "Reformed", etc.).
+
+**Event Data**:
+- `musicbrainz_id`: Unique MusicBrainz identifier for the artist
+- `artist_name`: Name of the artist
+- `old_status`: Previous status value (one of: "Active", "Disbanded", "On Tour", "Reformed", "Tour Planned", "Unknown")
+- `new_status`: New status value after update
+- `reformed_date`: ISO date string (YYYY-MM-DD) when band reformed (only included when transitioning to "Reformed" status)
+
+**Example Event Data**:
+```yaml
+event_type: music_favorites_status_changed
+data:
+  musicbrainz_id: "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+  artist_name: "Iron Maiden"
+  old_status: "Disbanded"
+  new_status: "Reformed"
+  reformed_date: "2025-10-05"
+```
+
+**Status Values Explained**:
+- **Active**: Band is active but no upcoming tour events detected
+- **Disbanded**: Band has officially ended (according to MusicBrainz)
+- **On Tour**: Band has concerts within the next 30 days or had concerts in the last 2 days
+- **Reformed**: Band has recently reformed after being disbanded (shown for 6 months)
+- **Tour Planned**: Band has concerts scheduled within the next 180 days
+- **Unknown**: Status could not be determined
+
+### **Concert Event Types**
+
+#### **`music_favorites_event_added`**
+
+Fired when a new concert is detected for one of your favorite artists.
+
+**Event Data**:
+- `musicbrainz_id`: Unique MusicBrainz identifier for the artist
+- `artist_name`: Name of the artist
+- `event_title`: Concert/event title (e.g., "World Tour 2025")
+- `event_date`: Date of the concert (YYYY-MM-DD format)
+- `venue`: Venue name where the concert will take place
+- `venue_address`: Full address of the venue (when available)
+- `latitude`: Geographic latitude of the venue (when available)
+- `longitude`: Geographic longitude of the venue (when available)
+- `url`: Direct link to event details on Bandsintown
+
+**Example Event Data**:
+```yaml
+event_type: music_favorites_event_added
+data:
+  musicbrainz_id: "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+  artist_name: "Iron Maiden"
+  event_title: "The Future Past World Tour"
+  event_date: "2025-07-15"
+  venue: "Madison Square Garden"
+  venue_address: "4 Pennsylvania Plaza, New York, NY 10001"
+  latitude: 40.7505
+  longitude: -73.9934
+  url: "https://www.bandsintown.com/e/102845109"
+```
+
+#### **`music_favorites_event_removed`**
+
+Fired when a previously announced concert is cancelled or removed from the schedule.
+
+**Event Data**:
+- `musicbrainz_id`: Unique MusicBrainz identifier for the artist
+- `artist_name`: Name of the artist
+- `event_title`: Concert/event title
+- `event_date`: Original date of the cancelled concert
+- `venue`: Venue name where the concert was scheduled
+- `venue_address`: Address of the venue (when available)
+
+**Example Event Data**:
+```yaml
+event_type: music_favorites_event_removed
+data:
+  musicbrainz_id: "ca891d65-d9b0-4258-89f7-e6ba29d83767"
+  artist_name: "Iron Maiden"
+  event_title: "The Future Past World Tour"
+  event_date: "2025-07-15"
+  venue: "Madison Square Garden"
+  venue_address: "4 Pennsylvania Plaza, New York, NY 10001"
+```
+
+### **Event Automation Examples**
+
+#### **Status Change Notifications**
+
+Get notified when your favorite artists' status changes:
+
+```yaml
+automation:
+  - alias: "Band Reformed Alert"
+    trigger:
+      platform: event
+      event_type: music_favorites_status_changed
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.new_status == 'Reformed' }}"
+    action:
+      - service: notify.mobile_app_your_phone
+        data:
+          title: "🎉 Band Reformed!"
+          message: >
+            {{ trigger.event.data.artist_name }} has reformed!
+            They were previously {{ trigger.event.data.old_status }}.
+```
+
+#### **Tour Announcement Alerts**
+
+Get notified when bands announce tours:
+
+```yaml
+automation:
+  - alias: "Tour Announcement Alert"
+    trigger:
+      platform: event
+      event_type: music_favorites_status_changed
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.event.data.new_status in ['On Tour', 'Tour Planned'] }}
+    action:
+      - service: notify.persistent_notification
+        data:
+          title: "🎸 Tour Announcement"
+          message: >
+            {{ trigger.event.data.artist_name }} is {{ trigger.event.data.new_status }}!
+```
+
+#### **Band Status Tracking**
+
+Track all status changes in a log:
+
+```yaml
+automation:
+  - alias: "Log All Status Changes"
+    trigger:
+      platform: event
+      event_type: music_favorites_status_changed
+    action:
+      - service: logbook.log
+        data:
+          name: "Music Favorites Status Change"
+          message: >
+            {{ trigger.event.data.artist_name }}:
+            {{ trigger.event.data.old_status or 'Unknown' }} → {{ trigger.event.data.new_status }}
+          entity_id: "sensor.music_favorites_{{ trigger.event.data.artist_name | lower | replace(' ', '_') }}"
+```
+
+#### **Selective Status Alerts**
+
+Only get notified about specific status changes:
+
+```yaml
+automation:
+  - alias: "Important Status Changes Only"
+    trigger:
+      platform: event
+      event_type: music_favorites_status_changed
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.event.data.new_status in ['Reformed', 'Disbanded', 'On Tour'] }}
+    action:
+      - service: notify.mobile_app_your_phone
+        data:
+          title: "⚡ {{ trigger.event.data.artist_name }}"
+          message: >
+            {% if trigger.event.data.new_status == 'Reformed' %}
+              The band has reformed! 🎉
+            {% elif trigger.event.data.new_status == 'Disbanded' %}
+              The band has disbanded. 😢
+            {% elif trigger.event.data.new_status == 'On Tour' %}
+              The band is now on tour! 🎸
+            {% endif %}
+```
+
+#### **Concert Announcement Notifications**
+
+Get notified immediately when your favorite artists announce new concerts:
+
+```yaml
+automation:
+  - alias: "New Concert Alert"
+    trigger:
+      platform: event
+      event_type: music_favorites_event_added
+    action:
+      - service: notify.mobile_app_your_phone
+        data:
+          title: "🎵 New Concert Alert!"
+          message: >
+            {{ trigger.event.data.artist_name }} announced a concert!
+            📅 {{ trigger.event.data.event_date }}
+            📍 {{ trigger.event.data.venue }}
+          data:
+            actions:
+              - action: "VIEW_CONCERT"
+                title: "View Details"
+                uri: "{{ trigger.event.data.url }}"
+```
+
+#### **Location-Based Concert Filtering**
+
+Only get notified about concerts within a specific distance from your location:
+
+```yaml
+automation:
+  - alias: "Local Concert Alerts"
+    trigger:
+      platform: event
+      event_type: music_favorites_event_added
+    condition:
+      - condition: template
+        value_template: >
+          {% set concert_lat = trigger.event.data.latitude %}
+          {% set concert_lon = trigger.event.data.longitude %}
+          {% set home_lat = 40.7589 %}  # Your home coordinates
+          {% set home_lon = -73.9851 %}
+          {% if concert_lat and concert_lon %}
+            {% set distance = distance(home_lat, home_lon, concert_lat, concert_lon) %}
+            {{ distance <= 50 }}  # Within 50km
+          {% else %}
+            false
+          {% endif %}
+    action:
+      service: notify.persistent_notification
+      data:
+        title: "Local Concert Alert"
+        message: >
+          {{ trigger.event.data.artist_name }} is playing nearby!
+          📅 {{ trigger.event.data.event_date }}
+          📍 {{ trigger.event.data.venue }}
+```
+
+#### **Concert Cancellation Alerts**
+
+Get notified when concerts are cancelled:
+
+```yaml
+automation:
+  - alias: "Concert Cancellation Alert"
+    trigger:
+      platform: event
+      event_type: music_favorites_event_removed
+    action:
+      service: notify.mobile_app_your_phone
+      data:
+        title: "❌ Concert Cancelled"
+        message: >
+          {{ trigger.event.data.artist_name }}'s concert on
+          {{ trigger.event.data.event_date }} at
+          {{ trigger.event.data.venue }} has been cancelled.
+```
+
+#### **Calendar Integration**
+
+Automatically add concerts to your personal calendar:
+
+```yaml
+automation:
+  - alias: "Add Concerts to Calendar"
+    trigger:
+      platform: event
+      event_type: music_favorites_event_added
+    action:
+      service: calendar.create_event
+      target:
+        entity_id: calendar.personal
+      data:
+        summary: "🎵 {{ trigger.event.data.artist_name }}"
+        description: >
+          {{ trigger.event.data.event_title }}
+          Venue: {{ trigger.event.data.venue }}
+          {% if trigger.event.data.url %}
+          More info: {{ trigger.event.data.url }}
+          {% endif %}
+        start_date: "{{ trigger.event.data.event_date }}"
+        location: "{{ trigger.event.data.venue }}{% if trigger.event.data.venue_address %}, {{ trigger.event.data.venue_address }}{% endif %}"
+```
+
+#### **Smart Home Integration**
+
+Change your smart home settings when concerts are announced:
+
+```yaml
+automation:
+  - alias: "Concert Mood Lighting"
+    trigger:
+      platform: event
+      event_type: music_favorites_event_added
+    condition:
+      condition: template
+      value_template: "{{ trigger.event.data.artist_name in ['Iron Maiden', 'Metallica', 'Black Sabbath'] }}"
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.living_room
+        data:
+          color_name: red
+          brightness: 255
+      - delay: "00:00:05"
+      - service: light.turn_off
+        target:
+          entity_id: light.living_room
+      - service: tts.speak
+        data:
+          entity_id: media_player.living_room_speaker
+          message: "{{ trigger.event.data.artist_name }} just announced a concert!"
+```
 
 ## Entities
 
@@ -524,23 +846,35 @@ The Music Favorites integration uses multiple update mechanisms to keep your fav
 - **Entity State Changes**: Sensor entities are updated immediately when favorites are added/removed
 - **Storage Persistence**: All changes are saved to Home Assistant's local database automatically
 
-#### **MusicBrainz Integration**
+#### **External Data Integration**
 
+**MusicBrainz Integration**:
 - **Artist Validation**: When adding favorites, the integration queries MusicBrainz to validate artist names and retrieve metadata
 - **Unique Identifiers**: MusicBrainz IDs are fetched and stored for each artist to ensure data consistency
 - **Alternative Names**: Name variants and aliases are collected from MusicBrainz for improved matching
+- **Relation Links**: Artist website, social media, and streaming platform links are fetched and stored
+
+**Bandsintown Concert Data**:
+- **Automatic Monitoring**: Concert schedules are automatically monitored for all favorite artists
+- **Event Detection**: New concerts are detected and stored, with events fired for notifications
+- **Schedule Changes**: Concert cancellations and modifications are tracked automatically
+- **Geographic Data**: Venue locations, addresses, and coordinates are collected when available
 
 #### **Update Frequency**
 
 - **User Actions**: Instant updates when using services or voice commands
-- **External Data**: MusicBrainz queries occur only when adding new favorites (not on a schedule)
-- **Connectivity Checks**: MusicBrainz connectivity is tested during setup and when connection issues are detected
+- **Concert Data**: Checked every 6 hours across all favorite artists using an intelligent cycle system
+- **Update Distribution**: Concert checks are distributed evenly across the 6-hour interval to avoid API rate limits
+- **MusicBrainz Refresh**: Artist metadata is refreshed during each concert data update cycle
+- **Connectivity Checks**: External service connectivity is monitored continuously
 
-#### **Future Update Plans**
+#### **Smart Update System**
 
-- **Event Data**: Planned integration with concert/event APIs for live updates
-- **Periodic Refresh**: Future versions will include scheduled updates for artist information
-- **Smart Polling**: Update frequency will adapt based on data freshness and user activity
+- **Snapshot Cycles**: The coordinator processes favorites in predictable cycles, ensuring all artists are updated regularly
+- **Rate Limiting**: Requests are distributed to respect external API limits and avoid overwhelming services
+- **Error Recovery**: Temporary failures don't interrupt the update cycle, with automatic retry on the next cycle
+- **Fast Startup**: First run returns immediately to avoid blocking Home Assistant startup
+- **Dynamic Scheduling**: Update intervals automatically adjust based on the number of favorite artists
 
 ## Supported Devices
 
