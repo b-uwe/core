@@ -24,7 +24,7 @@ PARALLEL_UPDATES = 1
 
 
 class EntityManager:
-    """Manages dynamic entity addition and removal for the Music Favorites integration.
+    """Manages dynamic entity addition for the Music Favorites integration.
 
     This class handles the creation of sensor entities when favorites are added dynamically
     through service calls. It ensures entities appear immediately in the UI without requiring
@@ -35,6 +35,15 @@ class EntityManager:
     - Checks entity registry → Prevents duplicate entity creation
     - Triggers UI updates → New entity appears in UI instantly via async_add_entities
     - Stores reference in runtime_data → Available for future entity management operations
+
+    Architectural Note - Why No remove_favorite_entity() Method:
+    Entity removal uses a different architectural pattern and doesn't require EntityManager:
+    - Add entities: Requires async_add_entities callback (stored in EntityManager)
+    - Remove entities: Uses Home Assistant's global entity registry directly
+    - The entity registry is accessible anywhere via er.async_get(hass)
+    - Entities are removed by calling entity_registry.async_remove(entity_id)
+    - This asymmetry is intentional and follows Home Assistant's design patterns
+    - See remove_favorite() in models.py for the direct registry removal implementation
     """
 
     def __init__(

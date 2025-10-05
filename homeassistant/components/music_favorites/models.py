@@ -531,6 +531,11 @@ async def remove_favorite(
     )
 
     # Remove the entity from entity registry
+    # Note: Unlike add_favorite which uses EntityManager, entity removal uses
+    # Home Assistant's global entity registry directly. This asymmetry is intentional:
+    # - Adding entities requires the async_add_entities callback (stored in EntityManager)
+    # - Removing entities can be done directly via the globally accessible entity registry
+    # See EntityManager class docstring in sensor.py for architectural explanation
     entity_registry = er.async_get(hass)
 
     # Find and remove the entity for this favorite
