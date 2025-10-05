@@ -5,6 +5,12 @@ from __future__ import annotations
 from datetime import timedelta
 
 DOMAIN = "music_favorites"
+
+# Event names
+EVENT_STATUS_CHANGED = "music_favorites_status_changed"
+EVENT_CONCERT_ADDED = "music_favorites_event_added"
+EVENT_CONCERT_REMOVED = "music_favorites_event_removed"
+
 PENDING_CHOICES_CLEANUP_TIMEOUT = 300
 RELATIONS_OF_INTEREST = [
     "AllMusic",

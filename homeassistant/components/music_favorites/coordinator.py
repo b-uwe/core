@@ -9,7 +9,13 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
+from .const import (
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    EVENT_CONCERT_ADDED,
+    EVENT_CONCERT_REMOVED,
+    EVENT_STATUS_CHANGED,
+)
 from .datatypes import MusicFavoritesConfigEntry
 from .ldjson import LdJsonError
 from .models import BandStatus, fetch_external_data
@@ -331,7 +337,7 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             )
 
         # Step 3: Update band status (calculated in fetch_external_data)
-        if artist_data:
+        if artist_data and new_status:
             try:
                 current_status = current_data.get("status")
 
@@ -340,17 +346,28 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     data_changed = True
 
                     # Store reformed_date when status changes to REFORMED
+                    reformed_date = None
                     if (
                         new_status == BandStatus.REFORMED
                         and current_status != BandStatus.REFORMED
                     ):
-                        updated_data["reformed_date"] = date.today().isoformat()
+                        reformed_date = date.today().isoformat()
+                        updated_data["reformed_date"] = reformed_date
 
                     _LOGGER.debug(
                         "Updated status for %s: %s -> %s",
                         favorite_name,
                         current_status,
                         new_status,
+                    )
+
+                    # Fire status change event
+                    self._fire_status_change(
+                        musicbrainz_id,
+                        favorite_name,
+                        current_status,
+                        new_status,
+                        reformed_date,
                     )
 
                 # Always store current artist data as previous for next comparison
@@ -426,7 +443,7 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     "longitude": event.get("longitude"),
                     "url": event.get("url"),
                 }
-                self.hass.bus.async_fire(f"{DOMAIN}_event_added", event_data)
+                self.hass.bus.async_fire(EVENT_CONCERT_ADDED, event_data)
                 _LOGGER.debug(
                     "Fired event_added for %s: %s on %s",
                     artist_name,
@@ -445,10 +462,69 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     "venue": event.get("location"),
                     "venue_address": event.get("venue_address"),
                 }
-                self.hass.bus.async_fire(f"{DOMAIN}_event_removed", event_data)
+                self.hass.bus.async_fire(EVENT_CONCERT_REMOVED, event_data)
                 _LOGGER.debug(
                     "Fired event_removed for %s: %s on %s",
                     artist_name,
                     event.get("text"),
                     event.get("event_date"),
                 )
+
+    def _fire_status_change(
+        self,
+        musicbrainz_id: str,
+        artist_name: str,
+        old_status: BandStatus | None,
+        new_status: BandStatus,
+        reformed_date: str | None = None,
+    ) -> None:
+        """Fire Home Assistant event when an artist's status changes.
+
+        This method announces status changes via the HA event bus, enabling
+        external automations and notifications to respond to band status updates
+        like reformations, tour announcements, or disbanding.
+
+        Event Detection Logic:
+        1. Status change detected in coordinator update cycle
+        2. Fire custom HA event with old and new status information
+        3. Include additional context like reformed_date when applicable
+
+        Custom Event Fired:
+        - "music_favorites_status_changed" → Artist status changed
+
+        External Integration:
+        These events can be used in HA automations for notifications when
+        favorite artists change status (e.g., reform, go on tour, disband).
+
+        Args:
+            musicbrainz_id: MusicBrainz ID of the artist (for event data)
+            artist_name: Display name of the artist (for user-friendly event data)
+            old_status: Previous status value (None if this is first status assignment)
+            new_status: New status value after update
+            reformed_date: ISO date string when status changed to REFORMED (optional)
+
+        Returns:
+            None
+
+        Side Effects:
+            - Fires custom HA event → Available for automations and external listeners
+            - Logs status change → Debugging and monitoring purposes
+        """
+        event_data: dict[str, Any] = {
+            "musicbrainz_id": musicbrainz_id,
+            "artist_name": artist_name,
+            "old_status": old_status,
+            "new_status": new_status,
+        }
+
+        # Include reformed_date if transitioning to REFORMED status
+        if new_status == BandStatus.REFORMED and reformed_date:
+            event_data["reformed_date"] = reformed_date
+
+        self.hass.bus.async_fire(EVENT_STATUS_CHANGED, event_data)
+        _LOGGER.debug(
+            "Fired status_changed for %s: %s -> %s",
+            artist_name,
+            old_status,
+            new_status,
+        )
