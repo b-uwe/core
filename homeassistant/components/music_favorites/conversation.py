@@ -217,25 +217,15 @@ class MusicFavoritesConversationEntity(ConversationEntity):
             return await self._handle_number_choice(text)
 
         # Check for untrack/remove first to avoid conflicts
-        short_pattern = r"^-\s*(.+)"
-        untrack_pattern = r"^untrack\s+(.+)"
-        remove_pattern = r"remove\s+(.+?)\s+from\s+(?:music\s+)?favorites"
+        # Combined pattern: short form (-), untrack command, or remove from (music) favorites
+        remove_pattern = (
+            r"^-\s*(.+)|^untrack\s+(.+)|remove\s+(.+?)\s+from\s+(?:music\s+)?favorites"
+        )
 
-        short_match = re.search(short_pattern, text)
-        untrack_match = re.search(untrack_pattern, text)
-        remove_match = re.search(remove_pattern, text)
-
-        if short_match or untrack_match or remove_match:
+        if remove_match := re.search(remove_pattern, text):
+            # Extract artist name from whichever group matched
             artist_name = (
-                short_match.group(1)
-                if short_match
-                else (
-                    untrack_match.group(1)
-                    if untrack_match
-                    else remove_match.group(1)
-                    if remove_match
-                    else ""
-                )
+                remove_match.group(1) or remove_match.group(2) or remove_match.group(3)
             ).strip()
             _LOGGER.debug("Untrack/remove request for: '%s'", artist_name)
 
@@ -273,25 +263,15 @@ class MusicFavoritesConversationEntity(ConversationEntity):
                 return ConversationResult(response=response)
 
         # Pattern: "track [artist/band]" or "add [artist/band] to music favorites"
-        short_pattern = r"^\+\s*(.+)"
-        track_pattern = r"^track\s+(.+)"
-        add_pattern = r"add\s+(.+?)\s+to\s+music\s+favorites"
+        # Combined pattern: short form (+), track command, or add to (music) favorites
+        add_pattern = (
+            r"^\+\s*(.+)|^track\s+(.+)|add\s+(.+?)\s+to\s+(?:music\s+)?favorites"
+        )
 
-        short_match = re.search(short_pattern, text)
-        track_match = re.search(track_pattern, text)
-        add_match = re.search(add_pattern, text)
-
-        if short_match or track_match or add_match:
+        if add_match := re.search(add_pattern, text):
+            # Extract artist name from whichever group matched
             artist_name = (
-                short_match.group(1)
-                if short_match
-                else (
-                    track_match.group(1)
-                    if track_match
-                    else add_match.group(1)
-                    if add_match
-                    else ""
-                )
+                add_match.group(1) or add_match.group(2) or add_match.group(3)
             ).strip()
             _LOGGER.debug("Track/add request for: '%s'", artist_name)
             response = intent.IntentResponse(language="en")
