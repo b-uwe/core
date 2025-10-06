@@ -302,9 +302,9 @@ class MusicFavoritesCalendar(CalendarEntity):
         state in the UI and drives calendar integration displays.
 
         Event Selection Logic:
-        - Filters all events for future dates → Only upcoming events considered
-        - Converts to CalendarEvent objects → Standardized HA calendar format
-        - Returns earliest upcoming event → Chronologically next concert
+        - Scans all events for future dates → Only upcoming events considered
+        - Tracks earliest event by date comparison → Minimal memory overhead
+        - Converts only the winner → Single CalendarEvent object created
 
         UI Integration:
         - Calendar entity state → Shows next event summary and date
@@ -320,19 +320,40 @@ class MusicFavoritesCalendar(CalendarEntity):
             Events already distance-filtered → Only shows relevant nearby concerts
         """
         now = dt_util.now()  # Use timezone-aware now() instead of naive datetime.now()
-        upcoming_events = []
+        earliest_event_data = None
+        earliest_date = None
 
-        # Get all events and convert to CalendarEvent objects
+        # Find earliest upcoming event WITHOUT converting all events
         for event_data in self._get_all_events():
-            calendar_event = self._convert_to_calendar_event(event_data)
-            if calendar_event and calendar_event.start_datetime_local >= now:
-                upcoming_events.append(calendar_event)
+            event_date_str = event_data.get("event_date")
+            if not event_date_str:
+                continue
 
-        if not upcoming_events:
-            return None
+            try:
+                # Parse event date and convert to datetime for comparison
+                event_date = datetime.datetime.strptime(
+                    event_date_str, "%Y-%m-%d"
+                ).date()
+                event_datetime = datetime.datetime.combine(
+                    event_date, datetime.time.min, tzinfo=now.tzinfo
+                )
 
-        # Return the earliest upcoming event
-        return min(upcoming_events, key=lambda e: e.start_datetime_local)
+                # Only consider upcoming events
+                if event_datetime >= now:
+                    # Track earliest event by datetime comparison
+                    if earliest_date is None or event_datetime < earliest_date:
+                        earliest_date = event_datetime
+                        earliest_event_data = event_data
+
+            except (ValueError, TypeError) as err:
+                _LOGGER.warning("Failed to parse event date: %s", err)
+                continue
+
+        # Only convert the single earliest event to CalendarEvent
+        if earliest_event_data:
+            return self._convert_to_calendar_event(earliest_event_data)
+
+        return None
 
     async def async_get_events(
         self,
