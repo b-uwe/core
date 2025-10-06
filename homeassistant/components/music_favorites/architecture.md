@@ -1,5 +1,7 @@
 # Architecture
 
+This is more of an Uwe BrainDump on where I'm heading with this
+
 ## Goals
 
 - User can add
@@ -52,5 +54,8 @@
   so that we can bridge that for a while
 - What I actually want is adding and removing favorite acts right from the list device 🤷
   in Devices & Services
+
+### Sides notes
+
 - The Calendar is not particularly useful. What's MORE useful is a list of upcoming
-  events! I need to find a way to make that happen
+  events!
