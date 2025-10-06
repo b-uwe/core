@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .calendar_utils import create_calendar_device_info, update_filtered_calendar_cache
 from .const import DEFAULT_MAX_DISTANCE_KM, DISTANCE_FILTER_OPTIONS
-from .datatypes import MusicFavoritesConfigEntry
+from .models import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

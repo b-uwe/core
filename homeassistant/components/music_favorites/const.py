@@ -29,3 +29,9 @@ DISTANCE_FILTER_OPTIONS = ["25", "50", "100", "200", "500", "No limit"]
 
 # Update interval constants
 DEFAULT_UPDATE_INTERVAL = timedelta(hours=24)
+
+# Tour-related business logic constants
+REFORMED_DISPLAY_PERIOD = timedelta(days=180)  # 6 months for showing Reformed status
+TOUR_GRACE_PERIOD = timedelta(days=2)  # Show "On Tour" 2 days after last event
+TOUR_PLANNED_PERIOD = timedelta(days=180)
+TOUR_PREVIEW_PERIOD = timedelta(days=30)  # Show "On Tour" 30 days before

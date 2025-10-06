@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .calendar_utils import create_calendar_device_info
-from .datatypes import MusicFavoritesConfigEntry
+from .models import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

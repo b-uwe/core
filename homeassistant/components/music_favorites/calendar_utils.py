@@ -12,7 +12,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from .const import DEFAULT_MAX_DISTANCE_KM, DOMAIN, VERSION
 
 if TYPE_CHECKING:
-    from .datatypes import MusicFavoritesConfigEntry
+    from .models import MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

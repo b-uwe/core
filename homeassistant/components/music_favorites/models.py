@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from enum import StrEnum
 import logging
 from typing import TYPE_CHECKING, Any
@@ -12,6 +12,12 @@ from homeassistant.helpers import entity_registry as er
 
 from .bandsintown import extract_music_events
 from .calendar_utils import update_filtered_calendar_cache
+from .const import (
+    REFORMED_DISPLAY_PERIOD,
+    TOUR_GRACE_PERIOD,
+    TOUR_PLANNED_PERIOD,
+    TOUR_PREVIEW_PERIOD,
+)
 from .ldjson import LdJsonError, fetch_and_extract_ldjson
 from .musicbrainz import MusicBrainzClient, MusicBrainzError, extract_relation_links
 
@@ -20,6 +26,26 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Type alias for the Music Favorites config entry with runtime data specification
+#
+# This custom type extends the base ConfigEntry to include type hints for the runtime_data
+# dictionary that stores shared components and cached data used across all platforms.
+#
+# Runtime Data Structure:
+# - "update_interval": Update interval for coordinator scheduling
+# - "musicbrainz_client": Shared MusicBrainz API client instance
+# - "data_update_coordinator": Background data update coordinator
+# - "filtered_calendar_events": Cached distance-filtered events for calendar display
+# - "entity_manager": Dynamic entity manager for sensor platform
+# - "calendar_entity": Calendar entity reference for cache refresh notifications
+# - "pending_choices": Temporary storage for conversation disambiguation choices
+#
+# Config Entry Data Structure:
+# - "favorites": Dict of MusicBrainz ID → favorite artist data
+# - "distance_filter": Maximum distance in km for event filtering (or None for unlimited)
+type MusicFavoritesConfigEntry = ConfigEntry[dict[str, Any]]
 
 
 class BandStatus(StrEnum):
@@ -42,12 +68,6 @@ BAND_STATUS_ICONS = {
     BandStatus.TOUR_PLANNED: "mdi:bus-clock",
     BandStatus.UNKNOWN: "mdi:help-circle",
 }
-
-# Tour-related business logic constants
-REFORMED_DISPLAY_PERIOD = timedelta(days=180)  # 6 months for showing Reformed status
-TOUR_GRACE_PERIOD = timedelta(days=2)  # Show "On Tour" 2 days after last event
-TOUR_PLANNED_PERIOD = timedelta(days=180)
-TOUR_PREVIEW_PERIOD = timedelta(days=30)  # Show "On Tour" 30 days before
 
 
 def extract_pure_event_data(

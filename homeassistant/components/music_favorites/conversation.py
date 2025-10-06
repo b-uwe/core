@@ -14,8 +14,12 @@ from homeassistant.helpers import intent
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import PENDING_CHOICES_CLEANUP_TIMEOUT
-from .datatypes import MusicFavoritesConfigEntry
-from .models import add_favorite, remove_favorite, resolve_artist_from_name
+from .models import (
+    MusicFavoritesConfigEntry,
+    add_favorite,
+    remove_favorite,
+    resolve_artist_from_name,
+)
 
 _LOGGER = logging.getLogger(__name__)
 

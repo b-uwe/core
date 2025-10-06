@@ -16,8 +16,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, VERSION
-from .datatypes import MusicFavoritesConfigEntry
-from .models import BAND_STATUS_ICONS, BandStatus
+from .models import BAND_STATUS_ICONS, BandStatus, MusicFavoritesConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 

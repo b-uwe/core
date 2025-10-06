@@ -16,9 +16,8 @@ from .const import (
     EVENT_CONCERT_REMOVED,
     EVENT_STATUS_CHANGED,
 )
-from .datatypes import MusicFavoritesConfigEntry
 from .ldjson import LdJsonError
-from .models import BandStatus, fetch_external_data
+from .models import BandStatus, MusicFavoritesConfigEntry, fetch_external_data
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 
 _LOGGER = logging.getLogger(__name__)

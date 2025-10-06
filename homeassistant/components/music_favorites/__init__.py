@@ -15,7 +15,7 @@ from homeassistant.helpers.typing import ConfigType
 from .calendar_utils import update_filtered_calendar_cache
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 from .coordinator import MusicFavoritesCoordinator
-from .datatypes import MusicFavoritesConfigEntry
+from .models import MusicFavoritesConfigEntry
 from .musicbrainz import MusicBrainzClient, MusicBrainzError
 from .services import register_services
 

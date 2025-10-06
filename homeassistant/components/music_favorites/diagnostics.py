@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
-from .datatypes import MusicFavoritesConfigEntry
+from .models import MusicFavoritesConfigEntry
 
 
 async def async_get_config_entry_diagnostics(
