@@ -600,6 +600,7 @@ class TestMusicFavoritesCoordinator:
         self, coordinator, past_date, future_date
     ):
         """Test firing events for multiple added and removed events."""
+        future_date_2 = (datetime.now() + timedelta(days=60)).strftime("%Y-%m-%d")
         old_events = [
             {"text": "Old Concert", "event_date": past_date, "location": "Old Venue"}
         ]
@@ -611,9 +612,7 @@ class TestMusicFavoritesCoordinator:
             },
             {
                 "text": "New Concert 2",
-                "event_date": (datetime.now() + timedelta(days=60)).strftime(
-                    "%Y-%m-%d"
-                ),
+                "event_date": future_date_2,
                 "location": "New Venue 2",
             },
         ]
@@ -626,8 +625,8 @@ class TestMusicFavoritesCoordinator:
                 new_events,
             )
 
-            # Should fire 1 removed + 2 added = 3 events
-            assert mock_fire.call_count == 3
+            # Should fire 0 removed (past event skipped) + 2 added = 2 events
+            assert mock_fire.call_count == 2
 
     async def test_fire_event_changes_venue_change(self, coordinator, future_date):
         """Test event changes when venue changes (same date, different location)."""
@@ -840,3 +839,365 @@ class TestMusicFavoritesCoordinator:
                 # Should handle status update exceptions gracefully
                 assert result is not None  # Still returns data but logs the exception
                 assert "Failed to update status for Iron Maiden" in caplog.text
+
+    async def test_remove_old_events_keeps_future_events(
+        self, coordinator, future_date
+    ):
+        """Test that _remove_old_events keeps future events."""
+        events = [
+            {
+                "text": "Future Concert",
+                "event_date": future_date,
+                "location": "Madison Square Garden",
+            }
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Future events should be kept
+        assert len(result) == 1
+        assert result[0]["text"] == "Future Concert"
+
+    async def test_remove_old_events_keeps_today_events(self, coordinator):
+        """Test that _remove_old_events keeps events happening today."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        events = [
+            {"text": "Today Concert", "event_date": today, "location": "Local Venue"}
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Today's events should be kept
+        assert len(result) == 1
+        assert result[0]["text"] == "Today Concert"
+
+    async def test_remove_old_events_keeps_within_48h_grace_period(self, coordinator):
+        """Test that _remove_old_events keeps events within 48-hour grace period."""
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        two_days_ago = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
+
+        events = [
+            {
+                "text": "Yesterday Concert",
+                "event_date": yesterday,
+                "location": "Venue 1",
+            },
+            {"text": "Two Days Ago", "event_date": two_days_ago, "location": "Venue 2"},
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Events within 48-hour grace period should be kept
+        assert len(result) == 2
+
+    async def test_remove_old_events_removes_old_events(self, coordinator):
+        """Test that _remove_old_events removes events older than 48 hours."""
+        three_days_ago = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+
+        events = [
+            {
+                "text": "Three Days Ago",
+                "event_date": three_days_ago,
+                "location": "Venue 1",
+            },
+            {"text": "Week Ago", "event_date": week_ago, "location": "Venue 2"},
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Old events should be removed
+        assert len(result) == 0
+
+    async def test_remove_old_events_mixed_dates(self, coordinator, future_date):
+        """Test _remove_old_events with mixed event dates."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        three_days_ago = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+
+        events = [
+            {
+                "text": "Future Concert",
+                "event_date": future_date,
+                "location": "Venue 1",
+            },
+            {"text": "Today Concert", "event_date": today, "location": "Venue 2"},
+            {
+                "text": "Yesterday Concert",
+                "event_date": yesterday,
+                "location": "Venue 3",
+            },
+            {
+                "text": "Old Concert",
+                "event_date": three_days_ago,
+                "location": "Venue 4",
+            },
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Should keep future, today, and yesterday (within 48h), but remove 3 days ago
+        assert len(result) == 3
+        assert result[0]["text"] == "Future Concert"
+        assert result[1]["text"] == "Today Concert"
+        assert result[2]["text"] == "Yesterday Concert"
+
+    async def test_remove_old_events_handles_missing_dates(self, coordinator):
+        """Test that _remove_old_events handles events with missing dates."""
+        events = [
+            {"text": "No Date Event", "location": "Venue 1"},
+            {"text": "None Date Event", "event_date": None, "location": "Venue 2"},
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Events without dates should be kept (safe fallback)
+        assert len(result) == 2
+
+    async def test_remove_old_events_handles_invalid_dates(self, coordinator):
+        """Test that _remove_old_events handles invalid date formats."""
+        events = [
+            {
+                "text": "Invalid Date",
+                "event_date": "invalid-date",
+                "location": "Venue 1",
+            },
+            {
+                "text": "Malformed Date",
+                "event_date": "2024-13-45",
+                "location": "Venue 2",
+            },
+        ]
+
+        result = coordinator._remove_old_events(events)
+
+        # Events with unparsable dates should be kept (safe fallback)
+        assert len(result) == 2
+
+    async def test_remove_old_events_empty_list(self, coordinator):
+        """Test that _remove_old_events handles empty event list."""
+        result = coordinator._remove_old_events([])
+
+        assert result == []
+
+    async def test_fire_event_changes_skips_past_removed_events(
+        self, coordinator, past_date
+    ):
+        """Test that _fire_event_changes skips removal events for past concerts."""
+        old_events = [
+            {
+                "text": "Past Concert",
+                "event_date": past_date,
+                "location": "Old Venue",
+                "venue_address": "Old Address",
+            }
+        ]
+        new_events = []
+
+        with patch("homeassistant.core.EventBus.async_fire") as mock_fire:
+            coordinator._fire_event_changes(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                "Iron Maiden",
+                old_events,
+                new_events,
+            )
+
+            # Should NOT fire event_removed for past events
+            mock_fire.assert_not_called()
+
+    async def test_fire_event_changes_skips_today_removed_events(self, coordinator):
+        """Test that _fire_event_changes skips removal events for today's concerts."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        old_events = [
+            {
+                "text": "Today Concert",
+                "event_date": today,
+                "location": "Today Venue",
+                "venue_address": "Today Address",
+            }
+        ]
+        new_events = []
+
+        with patch("homeassistant.core.EventBus.async_fire") as mock_fire:
+            coordinator._fire_event_changes(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                "Iron Maiden",
+                old_events,
+                new_events,
+            )
+
+            # Should NOT fire event_removed for today's events
+            mock_fire.assert_not_called()
+
+    async def test_fire_event_changes_fires_future_removed_events(
+        self, coordinator, future_date
+    ):
+        """Test that _fire_event_changes fires removal events for future concerts."""
+        old_events = [
+            {
+                "text": "Future Concert",
+                "event_date": future_date,
+                "location": "Future Venue",
+                "venue_address": "Future Address",
+            }
+        ]
+        new_events = []
+
+        with patch("homeassistant.core.EventBus.async_fire") as mock_fire:
+            coordinator._fire_event_changes(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                "Iron Maiden",
+                old_events,
+                new_events,
+            )
+
+            # Should fire event_removed for future events (actual cancellations)
+            mock_fire.assert_called_once_with(
+                f"{DOMAIN}_event_removed",
+                {
+                    "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                    "artist_name": "Iron Maiden",
+                    "event_title": "Future Concert",
+                    "event_date": future_date,
+                    "venue": "Future Venue",
+                    "venue_address": "Future Address",
+                },
+            )
+
+    async def test_fire_event_changes_mixed_removed_events(
+        self, coordinator, past_date, future_date
+    ):
+        """Test _fire_event_changes with mix of past and future removed events."""
+        old_events = [
+            {
+                "text": "Past Concert",
+                "event_date": past_date,
+                "location": "Past Venue",
+            },
+            {
+                "text": "Future Concert",
+                "event_date": future_date,
+                "location": "Future Venue",
+            },
+        ]
+        new_events = []
+
+        with patch("homeassistant.core.EventBus.async_fire") as mock_fire:
+            coordinator._fire_event_changes(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                "Iron Maiden",
+                old_events,
+                new_events,
+            )
+
+            # Should only fire event_removed for future event
+            mock_fire.assert_called_once()
+            call_args = mock_fire.call_args[0][1]
+            assert call_args["event_title"] == "Future Concert"
+
+    async def test_fire_event_changes_removed_event_unparsable_date(self, coordinator):
+        """Test that removal events with unparsable dates are still fired (conservative)."""
+        old_events = [
+            {
+                "text": "Unknown Date Concert",
+                "event_date": "invalid-date",
+                "location": "Venue",
+            }
+        ]
+        new_events = []
+
+        with patch("homeassistant.core.EventBus.async_fire") as mock_fire:
+            coordinator._fire_event_changes(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                "Iron Maiden",
+                old_events,
+                new_events,
+            )
+
+            # Should fire event_removed when date cannot be parsed (be conservative)
+            mock_fire.assert_called_once_with(
+                f"{DOMAIN}_event_removed",
+                {
+                    "musicbrainz_id": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                    "artist_name": "Iron Maiden",
+                    "event_title": "Unknown Date Concert",
+                    "event_date": "invalid-date",
+                    "venue": "Venue",
+                    "venue_address": None,
+                },
+            )
+
+    async def test_fire_event_changes_removed_event_no_date(self, coordinator):
+        """Test that removal events with no date are still fired (conservative)."""
+        old_events = [{"text": "No Date Concert", "location": "Venue"}]
+        new_events = []
+
+        with patch("homeassistant.core.EventBus.async_fire") as mock_fire:
+            coordinator._fire_event_changes(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+                "Iron Maiden",
+                old_events,
+                new_events,
+            )
+
+            # Should NOT fire event when no date (can't determine if it's a past/future event)
+            # The event_date_str check will be None, so it won't enter the date parsing block
+            mock_fire.assert_called_once()
+
+    async def test_update_single_favorite_with_old_event_cleanup(
+        self, coordinator, mock_musicbrainz_client, future_date, caplog
+    ):
+        """Test that _update_single_favorite silently cleans up old events."""
+        three_days_ago = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        future_date_2 = (datetime.now() + timedelta(days=60)).strftime("%Y-%m-%d")
+
+        favorite_data = {
+            "variants": ["Iron Maiden"],
+            "status": BandStatus.ACTIVE,
+            "events": [
+                {
+                    "text": "Old Concert",
+                    "event_date": three_days_ago,
+                    "location": "Old Venue",
+                },
+                {
+                    "text": "Future Concert",
+                    "event_date": future_date,
+                    "location": "Future Venue",
+                },
+            ],
+        }
+
+        with patch(
+            "homeassistant.components.music_favorites.coordinator.fetch_external_data"
+        ) as mock_fetch_external:
+            # Return NEW event to trigger event change detection
+            mock_fetch_external.return_value = {
+                "artist_data": IRON_MAIDEN_COMPLETE_RESPONSE,
+                "relation_links": {},
+                "events": [
+                    {
+                        "text": "Future Concert",
+                        "event_date": future_date,
+                        "location": "Future Venue",
+                    },
+                    {
+                        "text": "New Future Concert",
+                        "event_date": future_date_2,
+                        "location": "New Venue",
+                    },
+                ],
+                "variants": ["Iron Maiden"],
+                "status": BandStatus.ACTIVE,
+            }
+
+            result = await coordinator._update_single_favorite(
+                "ca891d65-d9b0-4258-89f7-e6ba29d83767", favorite_data
+            )
+
+            # Should log the cleanup
+            assert "Silently removed 1 old events for Iron Maiden" in caplog.text
+
+            # Should return updated data with new event
+            assert result is not None
+            assert len(result["events"]) == 2

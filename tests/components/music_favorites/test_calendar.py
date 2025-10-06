@@ -486,6 +486,96 @@ def test_event_property_empty_favorites() -> None:
     assert next_event is None
 
 
+def test_event_property_event_without_date() -> None:
+    """Test event property with event missing event_date field."""
+    mock_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"favorites": {}, "distance_filter": 100},
+        unique_id="music_favorites",
+    )
+    # Create events where one is missing the event_date field
+    future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    mock_entry.runtime_data = {
+        "filtered_calendar_events": [
+            {
+                "text": "Event Without Date",
+                "location": "Test Venue",
+                "performer_name": "Test Artist",
+                "musicbrainz_id": "test-id",
+                # Missing event_date field - this should be skipped
+            },
+            {
+                "text": "Valid Event",
+                "event_date": future_date,
+                "location": "Valid Venue",
+                "performer_name": "Test Artist",
+                "musicbrainz_id": "test-id",
+            },
+        ]
+    }
+
+    device_info = DeviceInfo(
+        identifiers={(DOMAIN, f"{mock_entry.entry_id}_calendar")},
+        name="Concert Calendar",
+    )
+
+    calendar_entity = MusicFavoritesCalendar(mock_entry, device_info)
+
+    # Should skip event without date and return the valid event
+    next_event = calendar_entity.event
+    assert next_event is not None
+    assert next_event.summary == "Valid Event"
+
+
+def test_event_property_invalid_date_format() -> None:
+    """Test event property with invalid date format (ValueError/TypeError path)."""
+    mock_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"favorites": {}, "distance_filter": 100},
+        unique_id="music_favorites",
+    )
+    # Create events with invalid date formats
+    future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    mock_entry.runtime_data = {
+        "filtered_calendar_events": [
+            {
+                "text": "Event With Invalid Date",
+                "event_date": "invalid-date-format",  # This will cause ValueError
+                "location": "Test Venue",
+                "performer_name": "Test Artist",
+                "musicbrainz_id": "test-id",
+            },
+            {
+                "text": "Event With Malformed Date",
+                "event_date": "2024-13-99",  # Invalid month/day
+                "location": "Test Venue 2",
+                "performer_name": "Test Artist",
+                "musicbrainz_id": "test-id",
+            },
+            {
+                "text": "Valid Event",
+                "event_date": future_date,
+                "location": "Valid Venue",
+                "performer_name": "Test Artist",
+                "musicbrainz_id": "test-id",
+            },
+        ]
+    }
+
+    device_info = DeviceInfo(
+        identifiers={(DOMAIN, f"{mock_entry.entry_id}_calendar")},
+        name="Concert Calendar",
+    )
+
+    calendar_entity = MusicFavoritesCalendar(mock_entry, device_info)
+
+    # Should skip events with invalid dates and return the valid event
+    # This tests the ValueError/TypeError exception handling (lines 348-350)
+    next_event = calendar_entity.event
+    assert next_event is not None
+    assert next_event.summary == "Valid Event"
+
+
 async def test_async_get_events(
     hass: HomeAssistant, mock_config_entry_with_events
 ) -> None:
@@ -1039,7 +1129,7 @@ async def test_async_will_remove_from_hass() -> None:
     mock_super.assert_called_once()
 
 
-async def test_async_get_events_with_invalid_event_data() -> None:
+async def test_async_get_events_with_invalid_event_data(hass: HomeAssistant) -> None:
     """Test async_get_events with invalid event data that can't be converted."""
     entry = MockConfigEntry(domain=DOMAIN, data={"favorites": {}})
     # Add invalid event data that will return None from _convert_to_calendar_event
@@ -1059,7 +1149,7 @@ async def test_async_get_events_with_invalid_event_data() -> None:
     end_date = dt_util.as_utc(datetime(2025, 12, 2))
 
     # Run the async method
-    events = await calendar_entity.async_get_events(None, start_date, end_date)
+    events = await calendar_entity.async_get_events(hass, start_date, end_date)
 
     # Should only have one event (the valid one), invalid event should be skipped
     assert len(events) == 1

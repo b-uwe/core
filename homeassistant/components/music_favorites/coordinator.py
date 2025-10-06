@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import logging
 from typing import Any
 
@@ -310,6 +310,17 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             # Step 2: Update events data
             current_events = current_data.get("events", [])
 
+            # Silent cleanup: Remove events older than 48 hours as fallback
+            # (in case Bandsintown doesn't remove them promptly)
+            cleaned_current_events = self._remove_old_events(current_events)
+            if len(cleaned_current_events) != len(current_events):
+                _LOGGER.debug(
+                    "Silently removed %d old events for %s",
+                    len(current_events) - len(cleaned_current_events),
+                    favorite_name,
+                )
+                current_events = cleaned_current_events
+
             if new_events_data != current_events:
                 updated_data["events"] = new_events_data
                 data_changed = True
@@ -378,6 +389,52 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
 
         return updated_data if data_changed else None
 
+    def _remove_old_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Remove events older than 48 hours as fallback cleanup.
+
+        This method silently filters out past events that Bandsintown hasn't removed yet,
+        ensuring our cache doesn't accumulate stale data. The 48-hour grace period ensures
+        we don't prematurely remove events that might still be relevant (timezone confusion,
+        late updates, etc.).
+
+        Cleanup Logic:
+        - Parse event_date from each event
+        - Compare with today's date
+        - Keep events from today onwards, plus 48-hour grace period
+        - Remove events older than 48 hours ago
+
+        Args:
+            events: List of event dictionaries with event_date field
+
+        Returns:
+            Filtered list of events with old events removed
+        """
+        if not events:
+            return []
+
+        today = date.today()
+        cutoff_date = today - timedelta(days=2)  # 48 hours ago
+        filtered_events = []
+
+        for event in events:
+            event_date_str = event.get("event_date")
+            if not event_date_str:
+                # Keep events without dates (shouldn't happen, but be safe)
+                filtered_events.append(event)
+                continue
+
+            try:
+                event_date = datetime.strptime(event_date_str, "%Y-%m-%d").date()
+                # Keep event if it's newer than cutoff (today or future, or within 48h grace)
+                if event_date >= cutoff_date:
+                    filtered_events.append(event)
+            except (ValueError, TypeError):
+                # Keep events with unparsable dates (shouldn't happen, but be safe)
+                filtered_events.append(event)
+                continue
+
+        return filtered_events
+
     def _fire_event_changes(
         self,
         musicbrainz_id: str,
@@ -393,11 +450,16 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
         Event Detection Logic:
         1. Create unique keys for each event (date + location)
         2. Compare old vs new event sets to find additions and removals
-        3. Fire custom HA events with detailed event information
+        3. Filter out today/past events from removal notifications (natural lifecycle)
+        4. Fire custom HA events with detailed event information
 
         Custom Events Fired:
         - "music_favorites_event_added" → New concert announced
-        - "music_favorites_event_removed" → Concert cancelled/removed
+        - "music_favorites_event_removed" → Concert cancelled/removed (future events only)
+
+        Event Filtering:
+        - Removed events are NOT fired for today or past dates (natural event lifecycle)
+        - Only fires removal events for future concerts (actual cancellations)
 
         External Integration:
         These events can be used in HA automations for notifications, calendar updates,
@@ -416,6 +478,7 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
             - Fires custom HA events → Available for automations and external listeners
             - Logs event changes → Debugging and monitoring purposes
         """
+        today = date.today()
 
         # Create event keys for comparison (event_date + location)
         def event_key(event: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -451,9 +514,30 @@ class MusicFavoritesCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]
                     event.get("event_date"),
                 )
 
-        # Fire events for removed events
+        # Fire events for removed events (but only for future events)
         for event in old_events:
             if event_key(event) in removed_keys:
+                # Filter: Only fire removal events for FUTURE concerts
+                # Past/today events naturally disappear - don't notify about those
+                event_date_str = event.get("event_date")
+                if event_date_str:
+                    try:
+                        event_date = datetime.strptime(
+                            event_date_str, "%Y-%m-%d"
+                        ).date()
+                        # Skip removal notification if event is today or in the past
+                        if event_date <= today:
+                            _LOGGER.debug(
+                                "Skipping removal event for past concert %s: %s on %s",
+                                artist_name,
+                                event.get("text"),
+                                event_date_str,
+                            )
+                            continue
+                    except (ValueError, TypeError):
+                        # If we can't parse the date, fire the event anyway (be conservative)
+                        pass
+
                 event_data = {
                     "musicbrainz_id": musicbrainz_id,
                     "artist_name": artist_name,
