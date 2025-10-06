@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import datetime
 import logging
 import re
 from typing import Any
@@ -12,6 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, VERSION
 from .datatypes import MusicFavoritesConfigEntry
@@ -275,6 +277,7 @@ class FavoriteSensor(SensorEntity):
         - Basic Info: musicbrainz_id (unique identifier)
         - Name Variants: All known names/aliases (except primary display name)
         - External Links: All relation URLs (bandsintown_url, allmusic_url, etc.)
+        - Upcoming Concerts: Text summary of all upcoming concerts for this artist
 
         Synchronization Behavior:
         - Updates when config entry changes → New URLs appear when MusicBrainz relations change
@@ -293,6 +296,7 @@ class FavoriteSensor(SensorEntity):
             "variants": variants[1:]
             if len(variants) > 1
             else [],  # All except display name
+            "upcoming_concerts": self._generate_upcoming_concerts_text(),
         }
 
         # Add all relation links as individual attributes
@@ -340,6 +344,146 @@ class FavoriteSensor(SensorEntity):
         current_data = self._current_favorite_data
         status = current_data.get("status", BandStatus.UNKNOWN)
         return str(status)
+
+    def _generate_upcoming_concerts_text(self) -> str:
+        """Generate formatted text summary of upcoming concerts for this specific artist.
+
+        Creates a compact, readable text representation of upcoming concerts for this
+        favorite artist that can be displayed in entity attributes panels and used in
+        dashboard template cards. Unlike the calendar's next_shows attribute, this
+        shows ALL concerts for this artist regardless of distance filtering - which is
+        a calendar feature anyway.
+
+        Text Generation Process:
+        1. Get events for this artist → From current favorite data
+        2. Filter events for upcoming dates → Only future concerts included
+        3. Sort chronologically → Most immediate shows listed first
+        4. Format with numbered list → "1. Venue, City, Country - Date // 2. ..."
+
+        Format Design:
+        - Numbered list → Easy identification of individual events
+        - " // " separator → Clear event boundaries for regex parsing
+        - "Venue, City, Country - Date" → Artist name omitted (already the entity name)
+        - Human readable dates → "Jan 15, 2025" format for clarity
+
+        UI Integration:
+        - Entity attributes panel → Shows upcoming_concerts in entity details
+        - Template cards → Can extract and format individual events
+        - Dashboard displays → Quick overview of artist's upcoming concerts
+
+        Returns:
+            Formatted text with all upcoming concerts or "No upcoming concerts"
+            Format: "1. Venue, City, Country - Date // 2. Venue, City, Country - Date..."
+
+        Data Source:
+            Uses events from _current_favorite_data → Artist-specific event list
+            No distance filtering → Shows all concerts regardless of location
+        """
+        today = dt_util.now().date()
+        upcoming_events = []
+
+        # Get events for this specific favorite artist
+        events_data = self._current_favorite_data.get("events", [])
+
+        # Filter for upcoming events
+        for event_data in events_data:
+            try:
+                event_date_str = event_data.get("event_date")
+                if not event_date_str:
+                    continue
+
+                # Parse event date
+                event_date = datetime.datetime.strptime(
+                    event_date_str, "%Y-%m-%d"
+                ).date()
+
+                if event_date >= today:
+                    upcoming_events.append((event_date, event_data))
+
+            except (ValueError, TypeError) as err:
+                _LOGGER.warning("Failed to parse event date: %s", err)
+                continue
+
+        if not upcoming_events:
+            return "No upcoming concerts"
+
+        # Sort by date
+        upcoming_events.sort(key=lambda x: x[0])
+
+        # Format the text
+        text_lines = []
+        for i, (_, event_data) in enumerate(upcoming_events, 1):
+            formatted_event = self._format_concert_for_text(event_data)
+            if formatted_event:
+                text_lines.append(f"{i}. {formatted_event}")
+
+        return " // ".join(text_lines) if text_lines else "No upcoming concerts"
+
+    def _format_concert_for_text(self, event_data: dict[str, Any]) -> str | None:
+        """Format a single concert event into structured text for readable display.
+
+        Converts raw event data into a standardized, human-readable string format that
+        maintains consistent structure for both display and potential regex parsing.
+        Used by _generate_upcoming_concerts_text() to create the entity attributes summary.
+
+        Format Structure:
+        - Pattern: "Venue, City, Country - Date"
+        - Artist name omitted → Already in entity name, no need to repeat
+        - Location extracted from venue_address → City and Country from comma-separated string
+
+        Error Handling:
+        - Missing event_date → Returns None (event skipped)
+        - Invalid date format → Logs error and returns None
+        - Missing venue_address → Falls back to "Unknown Location"
+        - Missing other fields → Uses fallback values ("Unknown Venue")
+
+        Args:
+            event_data: Raw event dictionary with location, event_date, venue_address
+
+        Returns:
+            str: Formatted event string "Venue, City, Country - Date" for display
+            None: Formatting failed due to missing/invalid date data
+
+        Side Effects:
+            - Logs formatting errors → Debugging for invalid event data
+            - No state changes → Pure formatting function
+        """
+        try:
+            venue_name = event_data.get("location", "Unknown Venue")
+            event_date_str = event_data.get("event_date")
+            venue_address = event_data.get("venue_address")
+
+            if not event_date_str:
+                return None
+
+            # Parse event date
+            event_date = datetime.datetime.strptime(event_date_str, "%Y-%m-%d").date()
+
+            # Extract city and country from venue_address
+            # Format: "Street, City, Country" - we want the last 2 parts
+            location_parts = []
+            if venue_address:
+                address_parts = [part.strip() for part in venue_address.split(",")]
+                # Get last two parts (City, Country) if available
+                if len(address_parts) >= 2:
+                    location_parts = address_parts[-2:]  # City, Country
+                elif len(address_parts) == 1:
+                    location_parts = address_parts  # Just one part available
+
+            # Build location string: "Venue, City, Country" or just "Venue"
+            if location_parts:
+                full_location = f"{venue_name}, {', '.join(location_parts)}"
+            else:
+                full_location = venue_name
+
+        except (ValueError, TypeError) as err:
+            _LOGGER.error("Failed to format concert for text display: %s", err)
+            return None
+        else:
+            date_formatted = event_date.strftime("%b %d, %Y")
+
+            # Create formatted string: "Venue, City, Country - Date"
+            return f"{full_location} - {date_formatted}"
 
     async def async_added_to_hass(self) -> None:
         """Register entity with Home Assistant and set up automatic synchronization.
