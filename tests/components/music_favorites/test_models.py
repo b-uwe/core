@@ -1116,6 +1116,42 @@ def test_determine_band_status_tour_planned() -> None:
     assert status == BandStatus.TOUR_PLANNED
 
 
+def test_determine_band_status_disbanded_with_upcoming_tour() -> None:
+    """Test that upcoming tours override disbandment status."""
+    # Band marked as disbanded in MusicBrainz
+    artist_data = {
+        "name": "Disbanded Band",
+        "life-span": {"begin": "1990", "end": "2010", "ended": True},
+    }
+
+    # But they have upcoming tour dates
+    current_date = datetime.now()
+    event_date = current_date + timedelta(days=15)  # Within 30-day preview window
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
+
+    # Should show ON_TOUR instead of DISBANDED
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.ON_TOUR
+
+
+def test_determine_band_status_disbanded_with_planned_tour() -> None:
+    """Test that planned tours override disbandment status."""
+    # Band marked as disbanded in MusicBrainz
+    artist_data = {
+        "name": "Disbanded Band",
+        "life-span": {"begin": "1990", "end": "2010", "ended": True},
+    }
+
+    # But they have planned tour dates (beyond ON_TOUR window)
+    current_date = datetime.now()
+    event_date = current_date + timedelta(days=60)  # Beyond 30-day but within 180-day
+    events_data = [{"event_date": event_date.strftime("%Y-%m-%d")}]
+
+    # Should show TOUR_PLANNED instead of DISBANDED
+    status = determine_band_status(artist_data, events_data)
+    assert status == BandStatus.TOUR_PLANNED
+
+
 def test_determine_band_status_no_life_span() -> None:
     """Test determine_band_status handles missing life-span data."""
     artist_data = {"name": "Test Band"}  # No life-span

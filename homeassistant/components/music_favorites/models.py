@@ -116,8 +116,9 @@ def determine_band_status(
     Logic Flow:
     1. Check for MusicBrainz reformation signals → REFORMED if ended=false or end date removed
     2. Maintain REFORMED status for REFORMED_DISPLAY_PERIOD → Then reassess
-    3. Check MusicBrainz life-span data → DISBANDED if ended=true
-    4. Analyze tour events → ON_TOUR, TOUR_PLANNED based on event dates
+    3. Analyze tour events → ON_TOUR, TOUR_PLANNED based on event dates
+    4. Check MusicBrainz life-span data → DISBANDED if ended=true (only if no tours, since
+       MusicBrainz isn't always very up-to-date)
     5. Default to ACTIVE if none of the above apply
 
     Args:
@@ -132,9 +133,9 @@ def determine_band_status(
     Business Rules:
         - REFORMED: MusicBrainz signals reformation (ended=false or end date removed)
         - REFORMED (maintained): Keep for REFORMED_DISPLAY_PERIOD after initial detection
-        - DISBANDED: Band has ended according to MusicBrainz (ended=true)
         - ON_TOUR: Events within 30 days before to 2 days after today
         - TOUR_PLANNED: Events within next 180 days
+        - DISBANDED: Band has ended according to MusicBrainz (ended=true), only if no upcoming tours
         - ACTIVE: Default status for active bands without tour activity
     """
     # Extract context from current data if available
@@ -177,16 +178,17 @@ def determine_band_status(
             )
             return BandStatus.REFORMED
 
-    # Check if band is currently ended according to MusicBrainz
-    # Either ended=true or presence of end date indicates disbanded status
-    if current_ended or current_end_date:
-        return BandStatus.DISBANDED
-
-    # Band is active (not ended) - check tour status
+    # Check tour status first - upcoming concerts override disbandment status
+    # (Bandsintown data is more current than MusicBrainz database flags)
     if events_data:
         tour_status = get_tour_status(events_data)
         if tour_status:
             return tour_status
+
+    # Check if band is currently ended according to MusicBrainz
+    # Either ended=true or presence of end date indicates disbanded status
+    if current_ended or current_end_date:
+        return BandStatus.DISBANDED
 
     # Default to active
     return BandStatus.ACTIVE
