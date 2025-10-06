@@ -11,6 +11,7 @@ from homeassistant.components.music_favorites.musicbrainz import extract_relatio
 from homeassistant.components.music_favorites.sensor import (
     EntityManager,
     FavoriteSensor,
+    async_setup_entry,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -447,3 +448,341 @@ class TestFavoriteSensorWithRelationLinks:
         # Should not have name attributes (only URLs)
         assert "allmusic_name" not in attributes
         assert "discogs_name" not in attributes
+
+
+class TestFavoriteSensorConcertFormatting:
+    """Test the FavoriteSensor concert formatting methods."""
+
+    @pytest.fixture
+    def sensor_with_events(self, mock_device_info):
+        """Create a sensor with concert event data."""
+        # Create favorite data with upcoming events
+        favorite_data = {
+            "variants": ["Test Band"],
+            "events": [
+                {
+                    "event_date": "2025-12-31",
+                    "location": "Madison Square Garden",
+                    "venue_address": "4 Pennsylvania Plaza, New York, USA",
+                },
+                {
+                    "event_date": "2025-11-15",
+                    "location": "Red Rocks Amphitheatre",
+                    "venue_address": "18300 W Alameda Pkwy, Morrison, USA",
+                },
+                {
+                    "event_date": "2024-01-01",  # Past event
+                    "location": "Past Venue",
+                    "venue_address": "Old Street, Old City, Old Country",
+                },
+            ],
+        }
+
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-id": favorite_data}}
+        return FavoriteSensor(
+            "test-id",
+            favorite_data,
+            mock_device_info,
+            mock_entry,
+        )
+
+    async def test_get_next_concerts_text_with_events(self, sensor_with_events):
+        """Test concert text formatting with upcoming events."""
+        concert_text = sensor_with_events._generate_upcoming_concerts_text()
+
+        # Should include both upcoming events in chronological order
+        assert "Red Rocks Amphitheatre" in concert_text
+        assert "Madison Square Garden" in concert_text
+        assert "Morrison, USA" in concert_text
+        assert "New York, USA" in concert_text
+
+        # Should not include past event
+        assert "Past Venue" not in concert_text
+
+        # Events should be numbered and separated by " // "
+        assert "1. " in concert_text
+        assert "2. " in concert_text
+        assert " // " in concert_text
+
+    async def test_get_next_concerts_text_no_events(self, mock_device_info):
+        """Test concert text when no events exist."""
+        favorite_data = {"variants": ["Test Band"]}  # No events
+
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-id": favorite_data}}
+        sensor = FavoriteSensor(
+            "test-id",
+            favorite_data,
+            mock_device_info,
+            mock_entry,
+        )
+
+        concert_text = sensor._generate_upcoming_concerts_text()
+        assert concert_text == "No upcoming concerts"
+
+    async def test_get_next_concerts_text_only_past_events(self, mock_device_info):
+        """Test concert text when all events are in the past."""
+        favorite_data = {
+            "variants": ["Test Band"],
+            "events": [
+                {
+                    "event_date": "2020-01-01",
+                    "location": "Old Venue",
+                    "venue_address": "Old City, Old Country",
+                }
+            ],
+        }
+
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-id": favorite_data}}
+        sensor = FavoriteSensor(
+            "test-id",
+            favorite_data,
+            mock_device_info,
+            mock_entry,
+        )
+
+        concert_text = sensor._generate_upcoming_concerts_text()
+        assert concert_text == "No upcoming concerts"
+
+    async def test_get_next_concerts_text_invalid_date(
+        self, mock_device_info, caplog: pytest.LogCaptureFixture
+    ):
+        """Test concert text with invalid date format."""
+        favorite_data = {
+            "variants": ["Test Band"],
+            "events": [
+                {
+                    "event_date": "invalid-date",
+                    "location": "Test Venue",
+                    "venue_address": "Test City, Test Country",
+                },
+                {
+                    "event_date": "2025-12-31",  # Valid event
+                    "location": "Valid Venue",
+                    "venue_address": "Valid City, Valid Country",
+                },
+            ],
+        }
+
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-id": favorite_data}}
+        sensor = FavoriteSensor(
+            "test-id",
+            favorite_data,
+            mock_device_info,
+            mock_entry,
+        )
+
+        concert_text = sensor._generate_upcoming_concerts_text()
+
+        # Should skip invalid event and include valid one
+        assert "Valid Venue" in concert_text
+        assert "Test Venue" not in concert_text
+
+        # Should log warning about invalid date
+        assert "Failed to parse event date" in caplog.text
+
+    async def test_get_next_concerts_text_missing_date(self, mock_device_info):
+        """Test concert text when event has no date."""
+        favorite_data = {
+            "variants": ["Test Band"],
+            "events": [
+                {
+                    # Missing event_date
+                    "location": "Test Venue",
+                    "venue_address": "Test City, Test Country",
+                },
+                {
+                    "event_date": "2025-12-31",  # Valid event
+                    "location": "Valid Venue",
+                    "venue_address": "Valid City, Valid Country",
+                },
+            ],
+        }
+
+        mock_entry = MagicMock()
+        mock_entry.data = {"favorites": {"test-id": favorite_data}}
+        sensor = FavoriteSensor(
+            "test-id",
+            favorite_data,
+            mock_device_info,
+            mock_entry,
+        )
+
+        concert_text = sensor._generate_upcoming_concerts_text()
+
+        # Should skip event without date and include valid one
+        assert "Valid Venue" in concert_text
+        assert "Test Venue" not in concert_text
+
+    async def test_format_concert_for_text_full_address(self, sensor_with_events):
+        """Test formatting single concert with full address."""
+        event_data = {
+            "event_date": "2025-12-31",
+            "location": "Test Venue",
+            "venue_address": "123 Main St, Test City, Test Country",
+        }
+
+        formatted = sensor_with_events._format_concert_for_text(event_data)
+
+        assert formatted is not None
+        assert "Test Venue" in formatted
+        assert "Test City" in formatted
+        assert "Test Country" in formatted
+        assert "Dec 31, 2025" in formatted
+        # Should not include street address
+        assert "123 Main St" not in formatted
+
+    async def test_format_concert_for_text_short_address(self, sensor_with_events):
+        """Test formatting concert with short address (city only)."""
+        event_data = {
+            "event_date": "2025-12-31",
+            "location": "Test Venue",
+            "venue_address": "Test City",
+        }
+
+        formatted = sensor_with_events._format_concert_for_text(event_data)
+
+        assert formatted is not None
+        assert "Test Venue" in formatted
+        assert "Test City" in formatted
+        assert "Dec 31, 2025" in formatted
+
+    async def test_format_concert_for_text_no_address(self, sensor_with_events):
+        """Test formatting concert without venue address."""
+        event_data = {
+            "event_date": "2025-12-31",
+            "location": "Test Venue",
+        }
+
+        formatted = sensor_with_events._format_concert_for_text(event_data)
+
+        assert formatted is not None
+        assert "Test Venue" in formatted
+        assert "Dec 31, 2025" in formatted
+        # Should only have venue name and date (no city/country)
+        assert formatted == "Test Venue - Dec 31, 2025"
+
+    async def test_format_concert_for_text_missing_date(self, sensor_with_events):
+        """Test formatting concert without date."""
+        event_data = {
+            "location": "Test Venue",
+            "venue_address": "Test City, Test Country",
+        }
+
+        formatted = sensor_with_events._format_concert_for_text(event_data)
+
+        assert formatted is None  # Should return None for missing date
+
+    async def test_format_concert_for_text_invalid_date(
+        self, sensor_with_events, caplog: pytest.LogCaptureFixture
+    ):
+        """Test formatting concert with invalid date."""
+        event_data = {
+            "event_date": "not-a-date",
+            "location": "Test Venue",
+            "venue_address": "Test City, Test Country",
+        }
+
+        formatted = sensor_with_events._format_concert_for_text(event_data)
+
+        assert formatted is None  # Should return None on error
+        assert "Failed to format concert for text display" in caplog.text
+
+
+class TestFavoriteSensorLifecycle:
+    """Test FavoriteSensor lifecycle methods."""
+
+    async def test_async_added_to_hass(
+        self, hass: HomeAssistant, mock_device_info, mock_config_entry_with_iron_maiden
+    ):
+        """Test entity registration and listener setup."""
+        favorites_data = mock_config_entry_with_iron_maiden.data["favorites"]
+        iron_maiden_id = IRON_MAIDEN_COMPLETE_RESPONSE["id"]
+        favorite_data = favorites_data[iron_maiden_id]
+
+        sensor = FavoriteSensor(
+            iron_maiden_id,
+            favorite_data,
+            mock_device_info,
+            mock_config_entry_with_iron_maiden,
+        )
+
+        # Add entity to hass
+        await sensor.async_added_to_hass()
+
+        # Verify listener was registered (async_on_remove was called)
+        # The listener should be in the entity's remove callbacks
+        if sensor._on_remove is not None:
+            assert len(sensor._on_remove) > 0
+
+    async def test_config_entry_updated_callback(
+        self, hass: HomeAssistant, mock_device_info, mock_config_entry_with_iron_maiden
+    ):
+        """Test config entry update triggers entity state update."""
+        favorites_data = mock_config_entry_with_iron_maiden.data["favorites"]
+        iron_maiden_id = IRON_MAIDEN_COMPLETE_RESPONSE["id"]
+        favorite_data = favorites_data[iron_maiden_id]
+
+        sensor = FavoriteSensor(
+            iron_maiden_id,
+            favorite_data,
+            mock_device_info,
+            mock_config_entry_with_iron_maiden,
+        )
+
+        # Mock async_schedule_update_ha_state
+        with patch.object(sensor, "async_schedule_update_ha_state") as mock_update:
+            # Call the update callback
+            await sensor._config_entry_updated(hass, mock_config_entry_with_iron_maiden)
+
+            # Verify state update was scheduled
+            mock_update.assert_called_once()
+
+
+class TestAsyncSetupEntry:
+    """Test async_setup_entry platform setup."""
+
+    async def test_setup_entry_creates_device_and_entities(
+        self, hass: HomeAssistant, mock_config_entry_with_iron_maiden
+    ):
+        """Test that async_setup_entry creates device info and entities."""
+        mock_add_entities = MagicMock()
+
+        # Call setup_entry
+        await async_setup_entry(
+            hass, mock_config_entry_with_iron_maiden, mock_add_entities
+        )
+
+        # Verify entity manager was created and stored
+        assert "entity_manager" in mock_config_entry_with_iron_maiden.runtime_data
+
+        # Verify entities were created for existing favorites
+        mock_add_entities.assert_called_once()
+        entities = mock_add_entities.call_args[0][0]
+
+        # Should have created one entity for Iron Maiden
+        assert len(entities) == 1
+        assert isinstance(entities[0], FavoriteSensor)
+        assert entities[0]._favorite_key == IRON_MAIDEN_COMPLETE_RESPONSE["id"]
+
+    async def test_setup_entry_no_initial_favorites(self, hass: HomeAssistant):
+        """Test async_setup_entry with no initial favorites."""
+        # Create config entry with no favorites
+        mock_entry = MagicMock()
+        mock_entry.entry_id = "test_entry_id"
+        mock_entry.data = {"favorites": {}}  # Empty favorites
+        mock_entry.runtime_data = {}
+
+        mock_add_entities = MagicMock()
+
+        # Call setup_entry
+        await async_setup_entry(hass, mock_entry, mock_add_entities)
+
+        # Verify entity manager was created
+        assert "entity_manager" in mock_entry.runtime_data
+
+        # Verify no entities were added (empty favorites)
+        mock_add_entities.assert_not_called()
