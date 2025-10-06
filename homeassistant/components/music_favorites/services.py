@@ -30,32 +30,24 @@ REMOVE_FAVORITE_SCHEMA = vol.Schema(
 )
 
 
-def _get_target_entry(
-    hass: HomeAssistant, call: ServiceCall
-) -> MusicFavoritesConfigEntry:
-    """Get and validate the target config entry for a service call.
+def _get_target_entry(hass: HomeAssistant) -> MusicFavoritesConfigEntry:
+    """Get and validate the Music Favorites config entry.
 
-    This helper function handles config entry discovery and validation for service calls,
-    supporting both explicit config entry targeting and automatic discovery for voice commands.
+    This helper function retrieves the single Music Favorites config entry and validates
+    it's loaded and ready for service calls.
 
-    Discovery Logic:
-    1. If config_entry specified → Find and validate specific entry
-    2. If no config_entry → Auto-discover first (and only) music_favorites entry
-    3. Validate entry is loaded and ready → Prevent service calls on broken integration
-
-    Voice Command Support:
-    Voice commands don't specify config entries, so this function automatically
-    finds the integration's config entry, enabling seamless voice control.
+    Music Favorites is a single-instance integration - there's only ever one config entry
+    representing the user's local favorites list. This simplifies service handling and
+    ensures consistent behavior across all service calls.
 
     Args:
         hass: Home Assistant instance for config entry access
-        call: Service call object containing optional config_entry parameter
 
     Returns:
         MusicFavoritesConfigEntry: Validated, loaded config entry ready for service operations
 
     Raises:
-        ServiceValidationError: When config entry not found, not loaded, or integration unavailable
+        ServiceValidationError: When integration not found, not loaded, or not ready
                               (becomes user-visible error message in service response)
 
     Validation Checks:
@@ -63,24 +55,15 @@ def _get_target_entry(
         - Config entry is in LOADED state (not failed, unloaded, or setting up)
         - Integration is ready to handle service calls
     """
-    config_entry_id = call.data.get("config_entry")
-    if config_entry_id:
-        target_entry = hass.config_entries.async_get_entry(config_entry_id)
-        if not target_entry:
-            raise ServiceValidationError(f"Config entry {config_entry_id} not found")
-    else:
-        # For voice commands, auto-find the music_favorites entry
-        entries = hass.config_entries.async_entries(DOMAIN)
-        if not entries:
-            raise ServiceValidationError("No Music Favorites integration found")
-        target_entry = entries[0]  # Use the first (and typically only) entry
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        raise ServiceValidationError("No Music Favorites integration found")
 
-    if target_entry.state != ConfigEntryState.LOADED:
-        raise ServiceValidationError(
-            f"Config entry {target_entry.entry_id} is not loaded"
-        )
+    entry = entries[0]
+    if entry.state != ConfigEntryState.LOADED:
+        raise ServiceValidationError("Music Favorites integration is not loaded")
 
-    return target_entry
+    return entry
 
 
 async def add_favorite_service(call: ServiceCall) -> None:
@@ -112,18 +95,17 @@ async def add_favorite_service(call: ServiceCall) -> None:
     """
     _LOGGER.debug("add_favorite service called with data: %s", call.data)
 
-    hass = call.hass  # Get hass from the call object
-    target_entry = _get_target_entry(hass, call)
+    hass = call.hass
+    entry = _get_target_entry(hass)
 
     _LOGGER.debug(
-        "Adding favorite with MusicBrainz ID '%s' to entry %s",
+        "Adding favorite with MusicBrainz ID '%s'",
         call.data["musicbrainz_id"],
-        target_entry.entry_id,
     )
 
     await add_favorite(
         hass,
-        target_entry,
+        entry,
         call.data["musicbrainz_id"],
     )
 
@@ -165,16 +147,15 @@ async def remove_favorite_service(call: ServiceCall) -> None:
     """
     _LOGGER.debug("remove_favorite service called with data: %s", call.data)
 
-    hass = call.hass  # Get hass from the call object
-    target_entry = _get_target_entry(hass, call)
+    hass = call.hass
+    entry = _get_target_entry(hass)
 
     _LOGGER.debug(
-        "Removing favorite with MusicBrainz ID '%s' from entry %s",
+        "Removing favorite with MusicBrainz ID '%s'",
         call.data["musicbrainz_id"],
-        target_entry.entry_id,
     )
 
-    await remove_favorite(hass, target_entry, call.data["musicbrainz_id"])
+    await remove_favorite(hass, entry, call.data["musicbrainz_id"])
 
     _LOGGER.debug(
         "Successfully removed favorite with ID '%s'", call.data["musicbrainz_id"]

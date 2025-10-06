@@ -1,6 +1,6 @@
 """Test Music Favorites service functionality."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 import voluptuous as vol
@@ -11,7 +11,7 @@ from homeassistant.components.music_favorites.services import (
     REMOVE_FAVORITE_SCHEMA,
     _get_target_entry,
 )
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceNotFound, ServiceValidationError
 
 from tests.common import MockConfigEntry
@@ -98,16 +98,16 @@ async def test_remove_favorite_service_success(
         )  # Third arg is musicbrainz_id
 
 
-async def test_add_favorite_service_with_config_entry_id(
+async def test_add_favorite_service_auto_discovery(
     hass: HomeAssistant, setup_integration
 ) -> None:
-    """Test add_favorite service with auto-discovery of config entry."""
+    """Test add_favorite service with auto-discovery of single config entry."""
     with patch(
         "homeassistant.components.music_favorites.services.add_favorite"
     ) as mock_add:
         mock_add.return_value = None
 
-        # Call the service - config entry is auto-discovered
+        # Call the service - config entry is auto-discovered (single-instance integration)
         await hass.services.async_call(
             DOMAIN,
             "add_favorite",
@@ -283,7 +283,9 @@ async def test_service_config_entry_not_loaded_after_setup(
     await hass.config_entries.async_unload(setup_integration.entry_id)
 
     # Now the service exists and config entry exists, but it's not loaded
-    with pytest.raises(ServiceValidationError, match="Config entry .* is not loaded"):
+    with pytest.raises(
+        ServiceValidationError, match="Music Favorites integration is not loaded"
+    ):
         await hass.services.async_call(
             DOMAIN,
             "add_favorite",
@@ -294,16 +296,12 @@ async def test_service_config_entry_not_loaded_after_setup(
         )
 
 
-async def test_get_target_entry_nonexistent_config_entry_id(
-    hass: HomeAssistant, setup_integration
-) -> None:
-    """Test _get_target_entry with a non-existent config entry ID."""
-    # Create a mock service call with a non-existent config_entry_id
-    mock_call = Mock(spec=ServiceCall)
-    mock_call.data = {"config_entry": "nonexistent-id"}
+async def test_get_target_entry_no_integration(hass: HomeAssistant) -> None:
+    """Test _get_target_entry when no Music Favorites integration exists."""
+    # Don't set up any config entry
 
     # This should raise a ServiceValidationError
     with pytest.raises(
-        ServiceValidationError, match="Config entry nonexistent-id not found"
+        ServiceValidationError, match="No Music Favorites integration found"
     ):
-        _get_target_entry(hass, mock_call)
+        _get_target_entry(hass)
