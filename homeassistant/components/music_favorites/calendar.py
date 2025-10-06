@@ -88,9 +88,9 @@ class MusicFavoritesCalendar(CalendarEntity):
         and automatically synchronizes with coordinator updates.
 
         Entity Configuration:
-        - Name: "Concert Calendar" → User-friendly calendar name in UI
+        - Name: None → Entity represents the device itself (name becomes "Concert Calendar")
         - Unique ID: Based on config entry → Survives restarts and reloads
-        - Device grouping → Groups with distance filter select under "Settings" device
+        - Device grouping → Groups with distance filter select under "Concert Calendar" device
 
         Data Source Setup:
         - Stores config entry reference → Used to access filtered event cache
@@ -111,7 +111,7 @@ class MusicFavoritesCalendar(CalendarEntity):
             - Stores config entry reference → Enables access to filtered event data
         """
         self._entry = entry
-        self._attr_name = "Concert Calendar"
+        self._attr_name = None
         self._attr_unique_id = f"{entry.entry_id}_calendar"
         self._attr_device_info = device_info
 

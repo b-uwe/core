@@ -113,7 +113,7 @@ def test_calendar_entity_initialization(mock_config_entry_with_events) -> None:
 
     calendar_entity = MusicFavoritesCalendar(mock_config_entry_with_events, device_info)
 
-    assert calendar_entity._attr_name == "Concert Calendar"
+    assert calendar_entity._attr_name is None
     assert (
         calendar_entity._attr_unique_id
         == f"{mock_config_entry_with_events.entry_id}_calendar"
